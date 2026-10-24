@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tacho Timesheet</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#1f4fbf">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #fff; --ink: #1c2230; --muted: #6a7385; --line: #dde1e8; --accent: #1f4fbf; --accent-ink: #fff;
+    --soft: #eef2fb; --warn: #9a5b00; --warn-bg: #fff4e0; --ok: #1d7a46; --field: #fff; --auto: #f7f9fc;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151c; --panel: #1b2029; --ink: #e6e9ef; --muted: #98a1b3; --line: #2c3340; --accent: #6f9bff; --accent-ink: #0b1020;
+      --soft: #1f2a40; --warn: #ffbf5c; --warn-bg: #3a2c12; --ok: #5fd08f; --field: #141820; --auto: #171c25; color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  header .card-info { color: var(--muted); font-size: 13px; flex: 1; min-width: 200px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 46%); gap: 18px; padding: 18px 20px; align-items: start; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } .preview { position: static !important; height: 80vh !important; } }
+  @media (max-width: 600px) {
+    main { padding: 12px 16px; } header { padding: 10px 16px; gap: 8px; } header .card-info { font-size: 12px; order: 3; flex-basis: 100%; }
+    section { padding: 12px; }
+    table.exp thead { display: none; }
+    table.exp, table.exp tbody, table.exp tr, table.exp td { display: block; }
+    table.exp tr[data-n] { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    table.exp td { padding: 0; }
+    table.exp td:nth-child(3) { grid-column: 1 / -1; }
+  }
+  body.no-pdf-viewer #pdfFrame { display: none; }
+  body.no-pdf-viewer .preview { height: auto !important; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+  section > h2 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  section > h2 .sub { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+  details > summary { cursor: pointer; font-weight: 600; list-style: none; }
+  details > summary::before { content: '▸ '; color: var(--muted); }
+  details[open] > summary::before { content: '▾ '; }
+  .btn { appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 7px 12px; border-radius: 7px; font: inherit; cursor: pointer; white-space: nowrap; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .btn.small { padding: 3px 8px; font-size: 12.5px; }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 2px 4px; }
+  input, select, textarea { font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; width: 100%; min-width: 0; }
+  textarea { resize: vertical; min-height: 54px; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); border-color: var(--accent); }
+  .auto { background: var(--auto); }
+  .edited { border-color: var(--warn); }
+  label.f { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12.5px; }
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 26px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.over { border-color: var(--accent); background: var(--soft); }
+  .day { border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  .day.off { opacity: .8; }
+  .day.collapsed { padding: 6px 10px; }
+  .day.collapsed .day-head { margin-bottom: 0; }
+  .day.collapsed > :not(.day-head), .day.collapsed .reset, .day:not(.collapsed) .expand { display: none; }
+  .day-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .day-head b { min-width: 120px; }
+  .day-grid { display: grid; grid-template-columns: 90px 90px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .day-grid2 { display: grid; grid-template-columns: minmax(0, 1fr) 110px 90px; gap: 8px; margin-top: 8px; }
+  @media (max-width: 700px) { .day-grid { grid-template-columns: 1fr 1fr; } .day-grid2 { grid-template-columns: 1fr 1fr; } .day-grid2 label:first-child { grid-column: 1 / -1; } }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+  .chip { font-size: 11.5px; border: 1px solid var(--line); border-radius: 20px; padding: 1px 8px; background: var(--soft); color: var(--ink); cursor: pointer; }
+  .chip.gps { border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
+  .pin { font-size: 11px; color: var(--accent); text-decoration: none; margin-left: 4px; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--soft); color: var(--muted); }
+  .tag.warn { background: var(--warn-bg); color: var(--warn); }
+  table.exp { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.exp th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 4px; }
+  table.exp td { padding: 3px 4px; vertical-align: middle; }
+  table.exp td.num input { text-align: right; }
+  .thumb { width: 38px; height: 38px; object-fit: cover; border-radius: 5px; border: 1px solid var(--line); vertical-align: middle; }
+  .preview { position: sticky; top: 70px; height: calc(100vh - 90px); display: flex; flex-direction: column; gap: 10px; }
+  .preview iframe { flex: 1; width: 100%; border: 1px solid var(--line); border-radius: 10px; background: #888; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #sig { width: 100%; max-width: 460px; height: 150px; border: 1px solid var(--line); border-radius: 8px; background: #fff; touch-action: none; display: block; }
+  #sigImg { max-width: 220px; max-height: 70px; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 4px; }
+  .note { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; margin: 8px 0; }
+  .places td { padding: 3px 4px; }
+  footer { color: var(--muted); font-size: 12px; padding: 0 20px 20px; }
+  .hidden { display: none !important; }
+  .checks { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
+  label.check { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
+  label.check input { width: auto; margin: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tacho Timesheet</h1>
+  <div class="card-info" id="cardInfo">No card file loaded</div>
+  <label class="btn">Load .ddd file<input type="file" id="fileInput" hidden></label>
+</header>
+
+<main>
+  <div>
+    <section id="dropZone" class="drop">
+      <b>Drop your driver card download here</b><br>
+      <span class="small">A .ddd file from your card reader or tacho app. It's read in this browser and never uploaded anywhere.</span>
+    </section>
+
+    <section>
+      <h2>Week <span class="sub">Sunday to Saturday</span></h2>
+      <div class="row">
+        <button class="btn" id="prevWeek" title="Previous week">◀</button>
+        <select id="weekSel" style="max-width: 320px"></select>
+        <button class="btn" id="nextWeek" title="Next week">▶</button>
+        <span class="muted small" id="weekInfo"></span>
+      </div>
+      <div class="small muted" style="margin-top:10px">Fill in from the tacho:</div>
+      <div id="fillOpts" class="checks"></div>
+    </section>
+
+    <section>
+      <h2>Days <span class="sub">Filled from the tacho. Edited fields turn orange; ↺ puts the tacho values back.</span></h2>
+      <div id="days"></div>
+    </section>
+
+    <section>
+      <h2>Expenses &amp; receipts <span class="sub">Parking, tolls, etc. Photos are added as extra pages.</span></h2>
+      <table class="exp">
+        <thead><tr><th style="width:90px">Day</th><th style="width:110px">Type</th><th>Note</th><th style="width:86px">Amount £</th><th style="width:76px">VAT £</th><th style="width:96px">Receipt</th><th style="width:30px"></th></tr></thead>
+        <tbody id="expBody"></tbody>
+      </table>
+      <div class="actions" style="margin-top:8px">
+        <button class="btn small" id="addExp">+ Add expense</button>
+        <label class="btn small">+ Attach other photo / PDF<input type="file" id="attachOther" accept="image/*,application/pdf" multiple hidden></label>
+      </div>
+      <div id="otherAtt" class="chips"></div>
+    </section>
+
+    <section>
+      <h2>Bottom of the timesheet</h2>
+      <div class="grid2">
+        <label class="f">Total weekdays<input data-k="totalWeekdays"></label>
+        <label class="f">Total weekend days<input data-k="totalWeekendDays"></label>
+        <label class="f">24hr away from home<select data-k="away24"><option value="">(none)</option><option>YES</option><option>NO</option></select></label>
+        <label class="f">Declaration (no accidents etc.)<select data-k="declaration"><option value="">(none)</option><option>YES</option><option>NO</option></select></label>
+        <label class="f">Name (page 1)<input data-k="name"></label>
+        <label class="f">Week commencing<input data-k="weekCommencing"></label>
+      </div>
+      <h2 style="margin-top:14px">Subsistence claim (page 2)</h2>
+      <div class="grid2">
+        <label class="f">Employee's name (block letters)<input data-k="nameLine"></label>
+        <label class="f">Address line 1<input data-k="addr1"></label>
+        <label class="f">Address line 2<input data-k="addr2"></label>
+        <label class="f">National Insurance number<input data-k="ni"></label>
+        <label class="f">Vehicle no<input data-k="vehicle"></label>
+        <label class="f">Date signed<input data-k="signedDate"></label>
+        <label class="f">W/E date<input data-k="weDate"></label>
+        <label class="f">Include page 2<select data-k="page2"><option value="yes">Yes</option><option value="no">No</option></select></label>
+      </div>
+      <p class="muted small">Name, address, NI number and declaration are remembered for next time (in this browser only).</p>
+    </section>
+
+    <section>
+      <details id="sigDetails">
+        <summary>Signature <span class="muted small" id="sigState"></span></summary>
+        <p class="small muted">Sign with your mouse or finger, or upload a photo of your signature on white paper.</p>
+        <canvas id="sig" width="920" height="300"></canvas>
+        <div class="actions" style="margin-top:8px">
+          <button class="btn small" id="sigClear">Clear</button>
+          <button class="btn small primary" id="sigSave">Use this signature</button>
+          <label class="btn small">Upload image<input type="file" id="sigUpload" accept="image/*" hidden></label>
+          <img id="sigImg" class="hidden" alt="Saved signature">
+          <button class="btn small link hidden" id="sigRemove">Remove</button>
+        </div>
+      </details>
+    </section>
+
+    <section>
+      <details id="placesDetails">
+        <summary>Saved places &amp; settings</summary>
+        <p class="small muted">When you type your own name for a place (e.g. <i>Trewithen Dairy</i>), it's saved here and used automatically next time the truck is within the radius. The <b>Base</b> place decides nights out.</p>
+        <table class="places small" style="width:100%"><thead><tr><th>Base</th><th>Name</th><th>Radius m</th><th></th><th></th></tr></thead><tbody id="placesBody"></tbody></table>
+        <div class="grid2" style="margin-top:10px">
+          <label class="f">Look up place names online (OpenStreetMap)<select id="setGeo"><option value="yes">Yes</option><option value="no">No</option></select></label>
+          <label class="f">Remember place names I type<select id="setLearn"><option value="yes">Yes</option><option value="no">No</option></select></label>
+          <label class="f">Night out if day ends more than (km) from base<input id="setAway" type="number" min="1"></label>
+        </div>
+        <div class="actions" style="margin-top:10px">
+          <button class="btn small" id="exportSettings">Back up settings</button>
+          <label class="btn small">Restore settings<input type="file" id="importSettings" accept=".json" hidden></label>
+          <button class="btn small" id="resetWeek">Clear my edits for this week</button>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <div class="preview">
+    <div class="actions">
+      <button class="btn primary" id="download">Download PDF</button>
+      <button class="btn hidden" id="share">Share</button>
+      <button class="btn hidden" id="openPreview">Open preview</button>
+      <button class="btn" id="downloadBlank">Blank form</button>
+      <span class="muted small" id="status"></span>
+    </div>
+    <iframe id="pdfFrame" title="PDF preview"></iframe>
+  </div>
+</main>
+<footer>Everything stays on this computer. Place names © OpenStreetMap contributors (Nominatim). Times are UK local time.</footer>
+
+<script src="lib/pdf-lib.min.js"></script>
+<script src="logo.js"></script>
+<script src="tacho.js"></script>
+<script src="week.js"></script>
+<script src="form.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
