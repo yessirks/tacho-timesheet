@@ -139,7 +139,7 @@
       }
       geoQueue.shift();
       refreshAuto();
-      if (calMonth && $('#tab-diary').classList.contains('on')) { renderCalGrid(); fillCalEditor(); }
+      if (calMonth && $('#tab-diary').classList.contains('on')) { renderCalGrid(); fillCalEditor(); renderTimelineDay(); }
     }
     geoBusy = false;
     setStatus('');
@@ -428,10 +428,20 @@
   // "Read total" in the scanner fills an empty amount / VAT.
   function applyScanInfo(e, info) {
     if (!info) return '';
-    const said = [];
-    if (info.amount && !parseFloat(e.amount)) { e.amount = info.amount.toFixed(2); said.push('£' + e.amount); }
+    const said = [], fresh = !parseFloat(e.amount);
+    if (info.kind && fresh && info.kind !== e.type) { e.type = info.kind; said.push(TYPES[info.kind]); }
+    if (info.amount && fresh) { e.amount = info.amount.toFixed(2); said.push('£' + e.amount); }
     if (info.vat && !parseFloat(e.vat)) { e.vat = info.vat.toFixed(2); said.push('VAT £' + e.vat); }
     return said.length ? ' · read ' + said.join(', ') : '';
+  }
+  function autoRead(e, file, done) {
+    if (profile.autoRead === 'no' || !file || !/^image\//.test(file.type)) return;
+    toast('Reading the receipt…');
+    Scanner.readFile(file).then((info) => {
+      const said = applyScanInfo(e, info);
+      done();
+      toast(said ? 'From the receipt:' + said.replace(' · read', '') : "Couldn't read a total, please type it in.");
+    }).catch(() => toast('Reading needs an internet connection the first time.'));
   }
   const attThumb = (a) => a.kind === 'pdf' ? '<span class="tag">PDF</span>' : `<img class="thumb" src="${a.thumb}" alt="">`;
 
@@ -455,8 +465,10 @@
       const un = $('[data-act="unatt"]', tr); if (un) un.onclick = () => { delete e.att; saveWeek(); renderExpenses(); schedulePdf(); };
       const at = $('[data-act="att"]', tr);
       if (at) at.onchange = async () => {
-        try { e.att = await readAttachment(at.files[0]); } catch (err) { alert(err.message); return; }
+        const file = at.files[0];
+        try { e.att = await readAttachment(file); } catch (err) { alert(err.message); return; }
         saveWeek(); renderExpenses(); schedulePdf();
+        autoRead(e, file, () => { saveWeek(); renderExpenses(); schedulePdf(); });
       };
       const sc = $('[data-act="scan"]', tr);
       if (sc) sc.onchange = async () => {
@@ -467,6 +479,7 @@
         try { e.att = await readAttachment(scanned); e.att.scanned = true; } catch (err) { alert(err.message); return; }
         const read = applyScanInfo(e, scanned.scanInfo);
         saveWeek(); renderExpenses(); schedulePdf(); toast('Receipt scanned' + read);
+        if (!scanned.scanInfo) autoRead(e, scanned, () => { saveWeek(); renderExpenses(); schedulePdf(); });
       };
       const tv = $('.thumb, td .tag', tr);
       if (tv && e.att) tv.onclick = () => viewAttachment(e.att);
@@ -705,8 +718,10 @@
         const un = $('[data-act=unatt]', row); if (un) un.onclick = () => { delete e.att; saveWeekState(sun); draw(); };
         const at = $('[data-act=att]', row);
         if (at) at.onchange = async () => {
-          try { e.att = await readAttachment(at.files[0]); } catch (err) { alert(err.message); return; }
+          const file = at.files[0];
+          try { e.att = await readAttachment(file); } catch (err) { alert(err.message); return; }
           saveWeekState(sun); draw(); toast('Receipt added to this day');
+          autoRead(e, file, () => { saveWeekState(sun); draw(); renderCalGrid(); });
         };
         const sc = $('[data-act=scan]', row);
         if (sc) sc.onchange = async () => {
@@ -717,6 +732,7 @@
           try { e.att = await readAttachment(scanned); e.att.scanned = true; } catch (err) { alert(err.message); return; }
           const read = applyScanInfo(e, scanned.scanInfo);
           saveWeekState(sun); draw(); toast('Receipt saved to this day' + read);
+          if (!scanned.scanInfo) autoRead(e, scanned, () => { saveWeekState(sun); draw(); renderCalGrid(); });
         };
         const tv = $('.exp-photo .thumb, .exp-photo .tag', row);
         if (tv && e.att) tv.onclick = () => viewAttachment(e.att);
@@ -819,6 +835,7 @@
       onHold(c, () => chipMenu(s));
     });
     dayExpensesEditor($('#calExp'), calSel);
+    renderTimelineDay();
   }
   function setupCal() {
     calSel = todayKey(); calMonth = calSel.slice(0, 7);
@@ -826,6 +843,7 @@
     $('#calPrev').onclick = () => move(-1);
     $('#calNext').onclick = () => move(1);
     $('#calToday').onclick = () => selectCalDay(todayKey());
+    $('#tlImport').onclick = importTimelineSheet;
     $('#calPrevDay').onclick = () => selectCalDay(Week.addDays(calSel, -1));
     $('#calNextDay').onclick = () => selectCalDay(Week.addDays(calSel, 1));
     $('#calMonthToggle').onclick = () => { const on = $('#diary').classList.toggle('show-month'); $('#calMonthToggle').textContent = on ? 'Week ▴' : 'Month ▾'; };
@@ -1382,6 +1400,110 @@
     }, { passive: true });
   }
 
+  // ---- Google Maps Timeline: where your phone says you stopped -----------------------------------------
+  let timeline = [];   // [{ s, e, lat, lon, n, a }] kept in IndexedDB
+  const DAY_MS = 86400000;
+  function dayVisits(date) {
+    const a = Date.parse(date + 'T00:00:00Z') - 2 * 3600000, b = a + DAY_MS + 4 * 3600000;   // generous; filtered by local date below
+    return timeline.filter((v) => v.e > a && v.s < b && (v.e - v.s) >= 5 * 60000)
+      .filter((v) => Week.localKey(v.s) === date || Week.localKey(v.e) === date || (Week.localKey(v.s) < date && Week.localKey(v.e) > date));
+  }
+  const atBase = (v) => { const b = basePlace(); return b && Week.distKm(b, v) * 1000 <= (b.radius || 1500); };
+  // Best name for a visit: Takeout's own name, your places, a shop/depot right there, else the town.
+  async function nameFor(v) {
+    if (v.n) return v.n;
+    const sp = savedAt(v);
+    if (sp && sp.name) return sp.name;
+    try {
+      const near = await Geo.nearby(v.lat, v.lon, 90);
+      const p = near.find((x) => x.dist < 70);
+      if (p) { const t = p.city; return t && !p.name.toLowerCase().includes(t.toLowerCase()) ? `${p.name} ${t}` : p.name; }
+    } catch { /* fall back to the town */ }
+    const cached = label(v);
+    if (cached) return cached;
+    try { const r = await Geo.reverse(v.lat, v.lon); return r.town || `${v.lat.toFixed(4)}, ${v.lon.toFixed(4)}`; } catch { return `${v.lat.toFixed(4)}, ${v.lon.toFixed(4)}`; }
+  }
+  const quickName = (v) => v.n || (savedAt(v) || {}).name || label(v) || '…';
+  function renderTimelineDay() {
+    const box = $('#calTimeline');
+    if (!box) return;
+    if (!timeline.length) { box.innerHTML = ''; return; }
+    const list = dayVisits(calSel);
+    if (!list.length) { box.innerHTML = '<p class="small muted">🗺 No Google Timeline stops on this day.</p>'; return; }
+    box.innerHTML = `<h3 class="sub-h">🗺 Google Timeline <span class="muted small">· ${list.length} stop${list.length > 1 ? 's' : ''}</span></h3>
+      <div class="tl-list">${list.map((v, i) => {
+        const mins = Math.round((v.e - v.s) / 60000), from = Week.localKey(v.s) < calSel ? '◂ ' : '', to = Week.localKey(v.e) > calSel ? ' ▸' : '';
+        return `<div class="tl-row" data-i="${i}"><div class="tl-main"><b>${esc(quickName(v))}${atBase(v) ? ' <span class="tag">base</span>' : ''}</b>
+          <small>${from}${Week.local(v.s).time}–${Week.local(v.e).time}${to} · ${mins >= 60 ? Week.hm(mins) + ' h' : mins + ' min'}</small></div>
+          <div class="tl-act"><button type="button" class="btn small" data-t="drop">+ Drop</button><button type="button" class="btn small" data-t="pickup">+ Pickup</button><button type="button" class="btn small" data-t="star" title="Star this spot">⭐</button></div></div>`;
+      }).join('')}</div>
+      <div class="actions" style="margin-top:8px"><button type="button" class="btn small primary" data-t="fill">Fill this day from Timeline</button></div>`;
+    $$('.tl-row', box).forEach((row) => {
+      const v = list[+row.dataset.i];
+      $$('[data-t]', row).forEach((b) => b.onclick = async () => {
+        b.disabled = true;
+        const name = await nameFor(v);
+        b.disabled = false;
+        if (b.dataset.t === 'star') return starEditor({ name, lat: v.lat, lon: v.lon });
+        const l = (dget(calSel).stops || []).filter((x) => (x.name || '').trim());
+        l.push({ type: b.dataset.t, name, lat: v.lat, lon: v.lon });
+        setDiary(calSel, 'stops', l); renderCal(); toast(`Added ${STOP_TYPES[b.dataset.t]} ${name}`);
+      });
+    });
+    $('[data-t=fill]', box).onclick = async (e) => {
+      e.target.disabled = true; e.target.textContent = 'Filling…';
+      const n = await fillFromTimeline(calSel, list);
+      e.target.disabled = false; e.target.textContent = 'Fill this day from Timeline';
+      renderCal(); toast(n ? `Filled ${n} item${n > 1 ? 's' : ''} from Google Timeline` : 'Nothing new to add');
+    };
+  }
+  // First stop = start, last = finish (only if empty); stops of 10+ minutes in between become drops.
+  async function fillFromTimeline(date, list) {
+    let n = 0;
+    const e = dget(date), long = list.filter((v) => v.e - v.s >= 10 * 60000);
+    if (!long.length) return 0;
+    if (!e.start) { setDiary(date, 'start', await nameFor(long[0])); n++; }
+    if (!e.finish && long.length > 1) { setDiary(date, 'finish', await nameFor(long[long.length - 1])); n++; }
+    const stops = (dget(date).stops || []).filter((x) => (x.name || '').trim());
+    const have = new Set(stops.map((x) => x.name.trim().toLowerCase()));
+    for (const v of long.slice(1, -1)) {
+      if (atBase(v)) continue;
+      const name = await nameFor(v);
+      if (have.has(name.toLowerCase())) continue;
+      if (/services|truck ?stop|lorry ?park|truckstop/i.test(name)) continue;   // breaks, not drops
+      have.add(name.toLowerCase());
+      stops.push({ type: 'drop', name, lat: v.lat, lon: v.lon }); n++;
+    }
+    setDiary(date, 'stops', stops);
+    return n;
+  }
+  function importTimelineSheet() {
+    const sh = sheet(`<h3>🗺 Import Google Maps Timeline</h3>
+      <p class="small">Google keeps your Timeline on your phone. Export it once, then pick the file here:</p>
+      <ul class="small tl-help">
+        <li><b>Android:</b> Settings › Location › Location services › Timeline › <b>Export Timeline data</b> (saves <i>Timeline.json</i>).</li>
+        <li><b>iPhone:</b> Google Maps › your picture › Your Timeline › ⋯ › Location &amp; privacy settings › <b>Export Timeline data</b>.</li>
+        <li><b>Older data:</b> Google Takeout › Location History › the <i>Semantic Location History</i> JSON files (unzip first; you can pick several).</li>
+      </ul>
+      <p class="small muted">Timeline has to be switched on in Google Maps to record anything. The file stays on this device; only the place names are looked up online.</p>
+      <label class="btn primary" style="display:inline-flex">Choose Timeline file(s)<input type="file" data-x="file" accept=".json,application/json" multiple hidden></label>
+      <div class="small" data-x="status" style="margin-top:10px"></div>
+      ${timeline.length ? `<div class="actions" style="margin-top:10px"><button type="button" class="btn small" data-x="clear">Remove imported Timeline (${timeline.length} stops)</button></div>` : ''}
+      <div class="actions sheet-foot"><button type="button" class="btn small" data-close>Close</button></div>`);
+    $('[data-x=file]', sh).onchange = async (ev) => {
+      const st = $('[data-x=status]', sh);
+      let all = [], errs = [];
+      for (const f of ev.target.files) { try { all = all.concat(Timeline.parse(await f.text())); } catch (err) { errs.push(`${f.name}: ${err.message}`); } }
+      const m = Timeline.merge(timeline, all);
+      timeline = m.list; await idb.set('timeline', timeline);
+      const days = new Set(all.map((v) => Week.localKey(v.s))).size;
+      st.innerHTML = (m.added ? `✓ Added <b>${m.added}</b> stops over ${days} day${days === 1 ? '' : 's'}.` : 'No new stops in that file.') + (errs.length ? `<br><span class="warn-txt">${errs.map(esc).join('<br>')}</span>` : '');
+      renderCal();
+    };
+    const clr = $('[data-x=clear]', sh);
+    if (clr) clr.onclick = async () => { if (!confirm('Remove the imported Google Timeline from this device?')) return; timeline = []; await idb.set('timeline', []); sh.close(); renderCal(); };
+  }
+
   // ---- tabs -------------------------------------------------------------------------------------
   function showTab(t) {
     if (!['sheet', 'diary', 'places', 'me'].includes(t)) t = 'sheet';
@@ -1419,7 +1541,7 @@
   async function exportAll() {
     const weeks = {};
     for (const [k, v] of await idb.entries()) if (String(k).startsWith('week:')) weeks[k] = stripPhotos(v);
-    const data = { app: 'tacho-timesheet', version: 3, exported: new Date().toISOString(), profile, places, stars, diary, geo, weeks };
+    const data = { app: 'tacho-timesheet', version: 4, exported: new Date().toISOString(), profile, places, stars, diary, geo, weeks, timeline };
     download(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }), `tacho-timesheet-data-${todayKey()}.json`);
   }
   async function importAll(file) {
@@ -1441,6 +1563,7 @@
     }
     if (j.geo) { Object.assign(geo, j.geo); LS.set('geo', geo); }
     if (j.stars) j.stars.forEach(addStar);
+    if (j.timeline) { timeline = Timeline.merge(timeline, j.timeline).list; await idb.set('timeline', timeline); }
     for (const [k, v] of Object.entries(j.weeks || {})) {
       const cur = await idb.get(k);
       if (!cur) { await idb.set(k, v); continue; }
@@ -1613,6 +1736,9 @@
     $('#downloadBlank').onclick = async () => download(new Blob([await TimesheetPDF.build({})], { type: 'application/pdf' }), 'TC_timesheet_blank.pdf');
     setupSignature(); setupSettings(); setupFill(); setupCal(); setupEmail(); renderPlaces(); setupPlaces(); setupTabs(); setupStorage();
     window.TachoTimesheetDebug = { buildData, get card() { return card; } };
+    idb.get('timeline').then((t) => { if (Array.isArray(t)) { timeline = t; if ($('#tab-diary').classList.contains('on')) renderCal(); } }).catch(() => {});
+    $('#setAutoRead').value = profile.autoRead || 'yes';
+    $('#setAutoRead').onchange = (e) => { profile.autoRead = e.target.value; LS.set('profile', profile); };
     idb.get('card').then((c) => c ? loadCard(c.bytes, c.name, false) : buildWeekList()).catch(() => buildWeekList());
   }
   init();

@@ -64,6 +64,22 @@ Open the link in Chrome (Android) or Safari (iPhone), then "Install app" / "Add 
 It then works offline like an app. Get the .ddd onto the phone (card reader app, email, Drive…),
 tap "Load .ddd file", and use "Share" to send the PDF and the email text to the office.
 
+Google Maps Timeline
+--------------------
+Diary > "🗺 Google Timeline": pick the file you exported from Google Maps
+(Android: Settings > Location > Location services > Timeline > Export Timeline data;
+iPhone: Google Maps > your picture > Your Timeline > ... > Location & privacy settings >
+Export Timeline data; older data: Takeout "Semantic Location History" files).
+Each diary day then lists where you stopped, with + Drop / + Pickup / ⭐ buttons and
+"Fill this day from Timeline" (start, finish, and stops of 10+ min become drops;
+your base and motorway services are left out).
+
+Receipts are read automatically
+-------------------------------
+No account or API key needed: the reader runs in the browser (first use downloads it).
+After you scan or add a receipt photo it fills the empty amount and VAT and fixes the type
+(parking / toll / food). Turn it off in Me > Presets if you prefer.
+
 Where the data comes from
 -------------------------
 - Start time = card inserted, finish time = last activity (same as reading the tacho).

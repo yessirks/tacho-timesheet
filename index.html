@@ -94,6 +94,12 @@
   .places td { padding: 3px 4px; }
   footer { color: var(--muted); font-size: 12px; padding: 0 20px 20px; }
   .hidden { display: none !important; }
+  .tl-list { display: flex; flex-direction: column; gap: 6px; }
+  .tl-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+  .tl-main { display: flex; flex-direction: column; min-width: 0; }
+  .tl-main small { color: var(--muted); }
+  .tl-act { display: flex; gap: 6px; }
+  .tl-help { padding-left: 18px; margin: 6px 0; } .tl-help li { margin-bottom: 4px; }
   /* ---------- shared polish ---------- */
   .btn { transition: transform .08s, background .15s, border-color .15s; }
   .btn:active, .chip:active, .pick:active, .wk-day:active, .cal-d:active { transform: scale(.97); }
@@ -367,7 +373,7 @@
       <h2>Diary <span class="sub">Write down each day's places and drops as you go. When you load the .ddd they go straight into the timesheet.</span></h2>
       <div class="row" style="justify-content:space-between">
         <div class="row month-nav"><button class="btn small" id="calPrev">◀</button><b id="calTitle" style="min-width:120px;text-align:center"></b><button class="btn small" id="calNext">▶</button></div>
-        <div class="row"><button class="btn small" id="calToday">Today</button><button class="btn small" id="calMonthToggle">Month ▾</button></div>
+        <div class="row"><button class="btn small" id="calToday">Today</button><button class="btn small" id="calMonthToggle">Month ▾</button><button class="btn small" id="tlImport">🗺 Google Timeline</button></div>
       </div>
       <div id="calWeek" class="cal-week"></div>
       <div id="cal" class="cal"></div>
@@ -385,6 +391,7 @@
       <div id="calStops"></div>
       <div class="small muted" style="margin-top:8px">Tap to add one you've used before · hold to rename, remove or star it:</div>
       <div id="calChips" class="chips"></div>
+      <div id="calTimeline"></div>
       <h3 class="sub-h">Expenses this day <span class="muted small">(parking, tolls, food… add a photo of the receipt)</span></h3>
       <div id="calExp"></div>
       <div class="actions" style="margin-top:12px">
@@ -461,6 +468,7 @@
         <label class="f">Look up place names online (OpenStreetMap)<select id="setGeo"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Remember place names I type<select id="setLearn"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Night out if day ends more than (km) from base<input id="setAway" type="number" min="1"></label>
+        <label class="f">Read receipts automatically (amount, VAT, type)<select id="setAutoRead"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Write "Drop" before drop names on the timesheet<select id="setDropWord"><option value="no">No (just the name)</option><option value="yes">Yes</option></select></label>
       </div>
       <h2 style="margin-top:16px">Email wording</h2>
@@ -495,6 +503,7 @@
 <script src="form.js"></script>
 <script src="places.js"></script>
 <script src="scan.js"></script>
+<script src="timeline.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

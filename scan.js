@@ -216,7 +216,17 @@
     }
     const dm = text.match(/\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})\b/);
     const date = dm ? `${dm[1].padStart(2, '0')}/${dm[2].padStart(2, '0')}/${dm[3].length === 2 ? '20' + dm[3] : dm[3]}` : null;
-    return { amount: total, vat, date };
+    // What kind of expense it looks like.
+    const kind = /parking|car ?park|lorry ?park|truck ?stop|overnight|\bsnap\b/i.test(text) ? 'parking'
+      : /\b(toll|bridge|crossing|dart ?charge|tunnel)/i.test(text) ? 'tolls'
+        : /\b(meal|coffee|tea|sandwich|food|breakfast|lunch|dinner|greggs|mcdonald|costa|subway|burger|kfc|caf[eé]|restaurant|starbucks|drink|pasty|baguette|wrap)\b/i.test(text) ? 'food' : null;
+    return { amount: total, vat, date, kind };
+  }
+  // Read a saved receipt photo (used after Save, in the background).
+  async function readFile(file) {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 1600 / bmp.width);
+    return parseReceipt(await readText(look(draw(bmp, bmp.width * k, bmp.height * k), 'bw')));
   }
 
   // ---- the scanner screen ----------------------------------------------------------------------------------
@@ -397,5 +407,5 @@
     });
   }
 
-  root.Scanner = { open, detect, warp, look, stack, parseReceipt };
+  root.Scanner = { open, detect, warp, look, stack, parseReceipt, readFile };
 })(typeof self !== 'undefined' ? self : globalThis);
