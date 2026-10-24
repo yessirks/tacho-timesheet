@@ -331,6 +331,7 @@
       $('.reset', el).onclick = () => { ws.days[i] = {}; saveWeek(); refreshAuto(true); schedulePdf(); };
       box.appendChild(el);
       el.stopsEd = stopsEditor($('.stops-ed', el), date);
+      $$('[data-k=startPlace], [data-k=finishPlace]', el).forEach((inp) => typeahead(inp));
     }
     $$('[data-d]', box).forEach((inp) => {
       const i = +inp.dataset.d, k = inp.dataset.k;
@@ -602,7 +603,7 @@
       const l = list();
       box.innerHTML = `<div class="stops">${l.map((s, n) => `<div class="stop" data-n="${n}">
           <select data-s="type" aria-label="Type">${Object.entries(STOP_TYPES).map(([k, v]) => `<option value="${k}" ${s.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
-          <input data-s="name" list="placeNames" value="${esc(s.name)}" placeholder="Name, e.g. Sainsbury's Paignton" aria-label="Name">
+          <input data-s="name" value="${esc(s.name)}" placeholder="Name, e.g. Sainsbury's Paignton" aria-label="Name">
           <input data-s="ref" value="${esc(s.ref || '')}" placeholder="Trailer / ref" aria-label="Trailer or reference">
           <button type="button" class="btn small loc${isFinite(s.lat) ? ' on' : ''}" data-s="loc" title="${isFinite(s.lat) ? 'Located. Tap to locate again' : 'Use my location'}">📍</button>
           <button type="button" class="btn small link" data-s="del" title="Remove">✕</button></div>`).join('')}</div>
@@ -612,6 +613,10 @@
         $('[data-s=type]', row).onchange = (e) => { const l2 = list(); l2[n].type = e.target.value; save(l2); };
         $('[data-s=name]', row).oninput = (e) => { const l2 = list(); l2[n].name = e.target.value; save(l2); };
         $('[data-s=ref]', row).oninput = (e) => { const l2 = list(); l2[n].ref = e.target.value; save(l2); };
+        typeahead($('[data-s=name]', row), (it) => {
+          if (!isFinite(it.lat)) return;
+          const l2 = list(); l2[n].lat = it.lat; l2[n].lon = it.lon; save(l2, true);
+        });
         $('[data-s=loc]', row).onclick = () => locatePicker(`📍 Where is this ${(STOP_TYPES[list()[n].type] || 'stop').toLowerCase()}?`, (name, pos) => {
           const l2 = list(); l2[n].name = name;
           if (pos) { l2[n].lat = pos.lat; l2[n].lon = pos.lon; }
@@ -786,14 +791,19 @@
   function renderCal() {
     if (!calMonth) return;
     renderCalGrid();
+    renderCalWeek();
     const wd = DAYS[dayIdx(calSel)];
     $('#calDate').textContent = `${wd} ${fmtLong(calSel)}`;
     fillCalEditor();
     const ed = stopsEditor($('#calStops'), calSel);
     const freq = frequentStops();
-    $('#calChips').innerHTML = freq.map((s) => `<button type="button" class="chip" data-type="${s.type}">${s.type === 'drop' ? '' : STOP_TYPES[s.type] + ' · '}${esc(s.name)}</button>`).join('')
+    const SHOW = 8, all = $('#calChips').dataset.all === '1';
+    $('#calChips').innerHTML = freq.map((s, i) => `<button type="button" class="chip${i >= SHOW && !all ? ' hidden' : ''}" data-type="${s.type}">${s.type === 'drop' ? '' : STOP_TYPES[s.type] + ' · '}${esc(s.name)}</button>`).join('')
+      + (freq.length > SHOW ? `<button type="button" class="chip more" data-more>${all ? 'Less ▴' : `+${freq.length - SHOW} more ▾`}</button>` : '')
       || '<span class="small muted">Names you add show up here for next time.</span>';
-    $$('#calChips .chip').forEach((c, n) => {
+    const more = $('#calChips [data-more]');
+    if (more) more.onclick = () => { $('#calChips').dataset.all = all ? '' : '1'; renderCal(); };
+    $$('#calChips .chip:not(.more)').forEach((c, n) => {
       const s = freq[n];
       c.onclick = () => ed.add({ type: s.type, name: s.name, ...(isFinite(s.lat) ? { lat: s.lat, lon: s.lon } : {}) });
       onHold(c, () => chipMenu(s));
@@ -806,6 +816,11 @@
     $('#calPrev').onclick = () => move(-1);
     $('#calNext').onclick = () => move(1);
     $('#calToday').onclick = () => selectCalDay(todayKey());
+    $('#calPrevDay').onclick = () => selectCalDay(Week.addDays(calSel, -1));
+    $('#calNextDay').onclick = () => selectCalDay(Week.addDays(calSel, 1));
+    $('#calMonthToggle').onclick = () => { const on = $('#diary').classList.toggle('show-month'); $('#calMonthToggle').textContent = on ? 'Week ▴' : 'Month ▾'; };
+    setupSwipe($('#dayEditor'), () => selectCalDay(Week.addDays(calSel, 1)), () => selectCalDay(Week.addDays(calSel, -1)));
+    typeahead($('#calStart')); typeahead($('#calFinish'));
     const bind = (sel, field, fixOf) => {
       const el = $(sel);
       el.oninput = () => setDiary(calSel, field, el.value);
@@ -907,7 +922,7 @@
   }
 
   // ---- starred places: exact spots (gate entrances) you can navigate to ---------------------------------
-  let lastPos = null, map = null, mapLayer = null, mapPicking = false;
+  let lastPos = null, map = null, mapLayer = null;
   const saveStars = () => { LS.set('stars', stars); updatePlaceList(); if ($('#tab-places').classList.contains('on')) renderPlacesTab(); };
   function addStar(p) {
     const same = stars.find((s) => s.name.toLowerCase() === (p.name || '').toLowerCase() && Geo.distM(s, p) < 25);
@@ -933,13 +948,13 @@
         <label class="f">Name<input data-f="name" value="${esc(cur.name)}" placeholder="e.g. Sainsbury's Paignton – goods in"></label>
         <label class="f">Note (gate, bay, phone…)<input data-f="note" value="${esc(cur.note)}" placeholder="e.g. Gate 2 on Torquay Rd, ring bell"></label>
       </div>
-      <label class="f" style="margin-top:10px">Location: paste a Google Maps link or coordinates<input data-f="paste" placeholder="https://www.google.com/maps/… or 50.4362, -3.5699"></label>
-      <div class="small muted" data-f="where" style="margin-top:6px"></div>
-      <div class="actions" style="margin-top:8px"><button type="button" class="btn small" data-f="here">📍 Use where I am now</button>${p.id ? '<button type="button" class="btn small" data-f="del">Delete</button>' : ''}</div>
-      <div class="actions" style="margin-top:14px;justify-content:flex-end"><button type="button" class="btn small" data-close>Cancel</button><button type="button" class="btn small primary" data-f="save">Save</button></div>`);
+      <div class="loc-box"><div class="small" data-f="where"></div>
+        <div class="actions" style="margin-top:8px"><button type="button" class="btn small" data-f="adjust">🛰 Adjust on map</button><button type="button" class="btn small" data-f="here">📍 Where I am</button><button type="button" class="btn small" data-f="pastebtn">📋 Paste coordinates</button></div>
+        <input data-f="paste" placeholder="…or paste a Google Maps link / coordinates here" style="margin-top:8px"></div>
+      <div class="actions sheet-foot">${p.id ? '<button type="button" class="btn small" data-f="del" style="margin-right:auto">Delete</button>' : ''}<button type="button" class="btn small" data-close>Cancel</button><button type="button" class="btn small primary" data-f="save">Save</button></div>`);
     const where = () => {
-      $('[data-f=where]', sh).innerHTML = isFinite(cur.lat) ? `${cur.lat.toFixed(6)}, ${cur.lon.toFixed(6)} · <a href="${Geo.navLinks(cur).view}" target="_blank" rel="noopener">check on Google Maps</a>`
-        : 'No location yet: paste a link or use where you are.';
+      $('[data-f=where]', sh).innerHTML = isFinite(cur.lat) ? `📍 <b>${cur.lat.toFixed(6)}, ${cur.lon.toFixed(6)}</b> · <a href="${Geo.navLinks(cur).view}" target="_blank" rel="noopener">view on Google Maps</a>`
+        : '<span class="warn-txt">No location yet.</span> Adjust on the map, use where you are, or paste coordinates.';
     };
     where();
     $('[data-f=paste]', sh).oninput = (e) => {
@@ -947,10 +962,21 @@
       if (c) { cur.lat = c.lat; cur.lon = c.lon; if (c.name && !$('[data-f=name]', sh).value) $('[data-f=name]', sh).value = c.name; where(); }
       else if (Geo.isShortLink(v)) $('[data-f=where]', sh).textContent = 'Short "maps.app.goo.gl" links can\'t be read. In Google Maps, press and hold the exact spot: the coordinates appear at the top. Copy and paste those.';
     };
+    $('[data-f=adjust]', sh).onclick = async () => {
+      const start = isFinite(cur.lat) ? { lat: cur.lat, lon: cur.lon, zoom: 18 } : lastPos ? { ...lastPos, zoom: 17 } : { lat: 52.4, lon: -2.5, zoom: 6 };
+      sh.style.display = 'none';
+      const spot = await pinMap(start, 'Move the map so the pin is exactly on the gate');
+      sh.style.display = '';
+      if (spot) { cur.lat = spot.lat; cur.lon = spot.lon; where(); }
+    };
+    $('[data-f=pastebtn]', sh).onclick = async () => {
+      try { const t = await navigator.clipboard.readText(); const inp = $('[data-f=paste]', sh); inp.value = t; inp.dispatchEvent(new Event('input')); }
+      catch { $('[data-f=paste]', sh).focus(); toast('Press and hold the box, then Paste'); }
+    };
     $('[data-f=here]', sh).onclick = async (e) => {
       e.target.textContent = 'Finding you…';
       try { const pos = await Geo.here(); lastPos = pos; cur.lat = pos.lat; cur.lon = pos.lon; where(); e.target.textContent = `📍 Got it (±${Math.round(pos.acc)} m)`; }
-      catch (err) { alert(err.message); e.target.textContent = '📍 Use where I am now'; }
+      catch (err) { alert(err.message); e.target.textContent = '📍 Where I am'; }
     };
     const del = $('[data-f=del]', sh);
     if (del) del.onclick = () => { if (!confirm('Delete this starred place?')) return; stars = stars.filter((s) => s.id !== p.id); saveStars(); sh.close(); };
@@ -970,7 +996,7 @@
     const sh = sheet(`<h3>${esc(title)}</h3>
       <div class="small muted" data-p="status">Getting your location…</div>
       <div class="pick-list" data-p="list"></div>
-      <div class="inp-row" style="margin-top:10px"><input data-p="own" list="placeNames" placeholder="Or type a name"><button type="button" class="btn small primary" data-p="use">Use</button></div>
+      <div class="inp-row" style="margin-top:10px"><input data-p="own" placeholder="Or type a name"><button type="button" class="btn small primary" data-p="use">Use</button></div>
       <label class="check small" style="margin-top:10px"><input type="checkbox" data-p="star"> ⭐ Also star this exact spot (for sat-nav)</label>
       <div class="actions" style="margin-top:12px;justify-content:flex-end"><button type="button" class="btn small" data-close>Cancel</button></div>`);
     let pos = null;
@@ -984,6 +1010,7 @@
       onPick(name, spot ? { lat: spot.lat, lon: spot.lon } : null);
     };
     $('[data-p=use]', sh).onclick = () => pick($('[data-p=own]', sh).value);
+    typeahead($('[data-p=own]', sh), (it) => pick(it.name, isFinite(it.lat) ? it : null));
     $('[data-p=own]', sh).onkeydown = (e) => { if (e.key === 'Enter') pick(e.target.value); };
     const draw = () => {
       $('[data-p=list]', sh).innerHTML = items.map((it, n) => `<button type="button" class="pick" data-n="${n}"><span>${esc(it.name)}</span><span class="small muted">${esc(it.sub)}</span></button>`).join('');
@@ -1098,11 +1125,6 @@
       map = L.map('map', { zoomControl: true }).setView([52.4, -2.5], 6);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
       mapLayer = L.layerGroup().addTo(map);
-      map.on('click', (e) => {
-        if (!mapPicking) return;
-        setPicking(false);
-        starEditor({ lat: e.latlng.lat, lon: e.latlng.lng });
-      });
       const pts = [...stars, ...places].map((p) => [p.lat, p.lon]);
       if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 14 });
     }
@@ -1122,12 +1144,6 @@
     }
     if (lastPos) L.circleMarker([lastPos.lat, lastPos.lon], { radius: 7, color: '#fff', weight: 2, fillColor: '#1f4fbf', fillOpacity: 1 }).bindTooltip('You').addTo(mapLayer);
   }
-  function setPicking(on) {
-    mapPicking = on;
-    $('#starPick').classList.toggle('primary', on);
-    $('#starPick').textContent = on ? 'Tap the map… (cancel)' : '🗺 Pick on map';
-    $('#map').classList.toggle('picking', on);
-  }
   function renderPlacesTab() { renderStarList(); renderMap(); renderPlaces(); }
   function setupPlaces() {
     $('#starSearch').oninput = renderStarList;
@@ -1137,8 +1153,9 @@
       const s = stars.find((x) => x.name === name && Geo.distM(x, pos) < 25);
       if (s) starEditor(s);   // straight into the note: gate, bay, phone…
     });
-    $('#starPaste').onclick = () => {
-      const sh = sheet(`<h3>Add from Google Maps</h3>
+    $('#starPaste').onclick = () => addPlaceFlow();
+    $('#starBulk').onclick = () => {
+      const sh = sheet(`<h3>Paste several places</h3>
         <p class="small muted">In Google Maps, press and hold the exact spot (e.g. the gate), then copy the coordinates shown at the top, or use Share › Copy link and open it in the browser to get the long link. One place per line; you can paste several, like <i>Sainsbury's Paignton gate, 50.4362, -3.5699</i>.</p>
         <textarea data-s="txt" rows="5" placeholder="50.4362, -3.5699&#10;https://www.google.com/maps/place/…"></textarea>
         <div class="small muted" data-s="info" style="margin-top:6px"></div>
@@ -1156,7 +1173,11 @@
         list.forEach(addStar); toast(`⭐ Added ${list.length} places`);
       };
     };
-    $('#starPick').onclick = () => setPicking(!mapPicking);
+    $('#starPick').onclick = async () => {
+      const c = map && map.getCenter();
+      const spot = await pinMap(c ? { lat: c.lat, lon: c.lng, zoom: Math.max(map.getZoom(), 6) } : { lat: 52.4, lon: -2.5, zoom: 6 }, 'Zoom in and put the pin on the gate');
+      if (spot) starEditor({ lat: spot.lat, lon: spot.lon });
+    };
     const dl = (txt, type, ext) => download(new Blob([txt], { type }), `starred-places-${todayKey()}.${ext}`);
     $('#starGpx').onclick = () => dl(Geo.toGPX(stars), 'application/gpx+xml', 'gpx');
     $('#starKml').onclick = () => dl(Geo.toKML(stars), 'application/vnd.google-earth.kml+xml', 'kml');
@@ -1172,11 +1193,191 @@
     showHiddenCount();
   }
 
+  // ---- type-ahead: starred spots, saved places and your diary, as you type -----------------------------
+  function placeSuggestions(q) {
+    q = (q || '').trim().toLowerCase();
+    const score = (name) => {
+      const n = name.toLowerCase();
+      if (!q) return 1;
+      if (n.startsWith(q)) return 3;
+      if (n.split(/[\s,()'’./-]+/).some((w) => w.startsWith(q))) return 2;
+      return n.includes(q) ? 1 : 0;
+    };
+    const cand = [];
+    for (const s of stars) cand.push({ name: s.name, sub: s.note || 'Starred place', icon: '⭐', lat: s.lat, lon: s.lon, w: 3, d: lastPos ? Geo.distM(lastPos, s) : null });
+    for (const p of places) if (p.name) cand.push({ name: p.name, sub: p.base ? 'Base' : 'Saved place', icon: '📌', w: 2 });
+    for (const s of frequentStops()) cand.push({ name: s.name, sub: `Used ${s.c}×${s.type !== 'drop' ? ' · ' + STOP_TYPES[s.type] : ''}`, icon: '🕘', w: 1, c: s.c, ...(isFinite(s.lat) ? { lat: s.lat, lon: s.lon } : {}) });
+    for (const e of Object.values(diary)) for (const n of [e.start, e.finish]) if (n) cand.push({ name: n, sub: 'From your diary', icon: '🕘', w: 1, c: 0 });
+    for (const p of KNOWN_PLACES) cand.push({ name: p.name, sub: 'Known site', icon: '🏭', lat: p.lat, lon: p.lon, w: 0 });
+    // Skip what you're typing right now (the drop line saves as you type, so it is already "used once").
+    const typing = (c) => c.icon === '🕘' && (c.c || 0) <= 1 && c.name.trim().toLowerCase() === q;
+    const ranked = cand.map((c) => ({ ...c, sc: score(c.name) })).filter((c) => c.sc > 0 && !typing(c))
+      .sort((a, b) => b.sc - a.sc || b.w - a.w || ((a.d ?? 1e9) - (b.d ?? 1e9)) || (b.c || 0) - (a.c || 0));
+    const seen = new Set(), out = [];
+    for (const c of ranked) { const k = c.name.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(c); if (out.length >= 8) break; }
+    return out;
+  }
+  const hl = (name, q) => {
+    const i = q ? name.toLowerCase().indexOf(q.trim().toLowerCase()) : -1;
+    return i < 0 || !q.trim() ? esc(name) : esc(name.slice(0, i)) + '<u>' + esc(name.slice(i, i + q.trim().length)) + '</u>' + esc(name.slice(i + q.trim().length));
+  };
+  function typeahead(input, onPick) {
+    input.setAttribute('autocomplete', 'off'); input.removeAttribute('list');
+    const wrap = document.createElement('div');
+    wrap.className = 'ta-wrap';
+    input.parentNode.insertBefore(wrap, input); wrap.appendChild(input);
+    const box = document.createElement('div');
+    box.className = 'ta-box hidden'; box.setAttribute('role', 'listbox');
+    wrap.appendChild(box);
+    let items = [], act = -1;
+    const hide = () => { box.classList.add('hidden'); act = -1; };
+    const render = () => {
+      items = placeSuggestions(input.value);
+      const exact = items.length === 1 && items[0].name.toLowerCase() === input.value.trim().toLowerCase();
+      if (!items.length || exact) return hide();
+      box.innerHTML = items.map((it, i) => `<div class="ta-it${i === act ? ' on' : ''}" data-i="${i}" role="option"><span class="ta-ic">${it.icon}</span>` +
+        `<span class="ta-tx"><b>${hl(it.name, input.value)}</b><small>${esc(it.sub)}${it.d != null ? ' · ' + Geo.fmtDist(it.d) : ''}</small></span></div>`).join('');
+      box.classList.remove('hidden');
+    };
+    const pick = (it) => {
+      input.value = it.name; hide();
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      if (onPick) onPick(it);
+    };
+    input.addEventListener('focus', render);
+    input.addEventListener('input', (e) => { if (e.isTrusted) { act = -1; render(); } });
+    input.addEventListener('keydown', (e) => {
+      if (box.classList.contains('hidden')) return;
+      if (e.key === 'ArrowDown') { act = Math.min(items.length - 1, act + 1); render(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { act = Math.max(-1, act - 1); render(); e.preventDefault(); }
+      else if (e.key === 'Enter' && act >= 0) { e.preventDefault(); pick(items[act]); }
+      else if (e.key === 'Escape') hide();
+    });
+    input.addEventListener('blur', () => setTimeout(hide, 150));
+    box.addEventListener('pointerdown', (e) => { const el = e.target.closest('.ta-it'); if (!el) return; e.preventDefault(); pick(items[+el.dataset.i]); });
+  }
+
+  // ---- pin map: move the map until the pin sits on the gate (satellite by default) -----------------------
+  async function pinMap(center, title) {
+    try { await loadLeaflet(); } catch { alert('The map needs an internet connection.'); return null; }
+    return new Promise((resolve) => {
+      const sh = sheet(`<div class="pin-head"><b>${esc(title || 'Move the map so the pin is on the spot')}</b></div>
+        <div class="pin-map"><div class="pin-canvas"></div><div class="pin-cross" aria-hidden="true">📍</div></div>
+        <div class="pin-bar"><button type="button" class="btn small" data-m="layer">🗺 Map</button><button type="button" class="btn small" data-m="me">📍 Me</button><span class="small muted" data-m="ll"></span></div>
+        <div class="actions sheet-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" data-m="ok">✓ Use this spot</button></div>`);
+      sh.classList.add('full');
+      let result = null;
+      const close = sh.close;
+      sh.close = () => { close(); resolve(result); };
+      const m = L.map($('.pin-canvas', sh), { zoomControl: true, attributionControl: true }).setView([center.lat, center.lon], center.zoom || 18);
+      const street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
+      const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri' });
+      let isSat = (center.zoom || 18) >= 15;
+      (isSat ? sat : street).addTo(m);
+      const ll = () => { const c = m.getCenter(); $('[data-m=ll]', sh).textContent = `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`; };
+      m.on('move', ll); ll();
+      const layerBtn = $('[data-m=layer]', sh);
+      layerBtn.textContent = isSat ? '🗺 Map' : '🛰 Satellite';
+      layerBtn.onclick = () => { isSat = !isSat; m.removeLayer(isSat ? street : sat); (isSat ? sat : street).addTo(m); layerBtn.textContent = isSat ? '🗺 Map' : '🛰 Satellite'; };
+      $('[data-m=me]', sh).onclick = async () => {
+        try { const p = await Geo.here(); lastPos = p; m.setView([p.lat, p.lon], 19); } catch (e) { alert(e.message); }
+      };
+      $('[data-m=ok]', sh).onclick = () => { const c = m.getCenter(); result = { lat: c.lat, lon: c.lng }; sh.close(); };
+      setTimeout(() => m.invalidateSize(), 80);
+      setTimeout(() => m.invalidateSize(), 400);
+    });
+  }
+
+  // ---- ＋ Add place: search a name/postcode, paste a link or coordinates, here, or the map ------------------
+  function addPlaceFlow(prefill) {
+    const sh = sheet(`<h3>⭐ Add a place</h3>
+      <div class="inp-row"><input data-a="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search a name or postcode, or paste coordinates"><button type="button" class="btn" data-a="paste" title="Paste">📋</button></div>
+      <div class="pick-list" data-a="res"></div>
+      <div class="add-ways">
+        <button type="button" class="way" data-a="here"><span>📍</span><b>Where I am</b><small>Standing at the gate</small></button>
+        <button type="button" class="way" data-a="map"><span>🛰</span><b>On the map</b><small>Find the gate on satellite</small></button>
+      </div>
+      <p class="small muted">From Google Maps: press and hold the exact spot, tap the coordinates at the top to copy them, then tap 📋 here.</p>
+      <div class="actions sheet-foot"><button type="button" class="btn small" data-close>Cancel</button></div>`);
+    const q = $('[data-a=q]', sh), res = $('[data-a=res]', sh);
+    let timer, seq = 0;
+    const toPin = async (r) => {
+      sh.close();
+      const spot = await pinMap({ lat: r.lat, lon: r.lon, zoom: 18 }, 'Move the map so the pin is exactly on the gate');
+      if (spot) starEditor({ name: r.keepName ? r.name : '', lat: spot.lat, lon: spot.lon, note: '' });
+    };
+    const show = (list) => {
+      res.innerHTML = list.map((r, i) => `<button type="button" class="pick" data-i="${i}"><span>${r.icon} ${esc(r.name)}</span><span class="small muted">${esc(r.sub || '')}</span></button>`).join('');
+      $$('.pick', res).forEach((b) => b.onclick = () => toPin(list[+b.dataset.i]));
+    };
+    const run = async () => {
+      const v = q.value.trim(), my = ++seq;
+      if (!v) return show([]);
+      const c = Geo.parseCoords(v);
+      if (c) return show([{ icon: '📌', name: c.name || 'These coordinates', keepName: !!c.name, sub: `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`, lat: c.lat, lon: c.lon }]);
+      if (Geo.isShortLink(v)) { res.innerHTML = '<p class="small warn-txt">Short maps.app.goo.gl links can\'t be read. In Google Maps press and hold the spot and copy the coordinates instead.</p>'; return; }
+      if (v.length < 3) return;
+      res.innerHTML = '<p class="small muted">Searching…</p>';
+      try {
+        const list = await Geo.search(v, lastPos);
+        if (my !== seq) return;
+        if (!list.length) { res.innerHTML = '<p class="small muted">Nothing found. Try the postcode, or find it on the map.</p>'; return; }
+        // "Sainsbury's" + Paignton -> "Sainsbury's Paignton"
+        show(list.map((r) => ({ ...r, icon: '🔎', keepName: true, name: r.city && !r.name.toLowerCase().includes(r.city.toLowerCase()) && !/^[A-Z]{1,2}\d/.test(r.name) ? `${r.name} ${r.city}` : r.name })));
+      } catch { if (my === seq) res.innerHTML = '<p class="small warn-txt">Search failed. Check your signal.</p>'; }
+    };
+    q.oninput = () => { clearTimeout(timer); timer = setTimeout(run, 350); };
+    q.onkeydown = (e) => { if (e.key === 'Enter') { clearTimeout(timer); run(); } };
+    $('[data-a=paste]', sh).onclick = async () => {
+      try { q.value = (await navigator.clipboard.readText()).trim(); run(); }
+      catch { q.focus(); toast('Press and hold the box, then Paste'); }
+    };
+    $('[data-a=here]', sh).onclick = () => { sh.close(); $('#starHere').click(); };
+    $('[data-a=map]', sh).onclick = async () => {
+      sh.close();
+      const c = map ? map.getCenter() : null;
+      const start = lastPos ? { lat: lastPos.lat, lon: lastPos.lon, zoom: 17 } : c ? { lat: c.lat, lon: c.lng, zoom: Math.max(map.getZoom(), 6) } : { lat: 52.4, lon: -2.5, zoom: 6 };
+      const spot = await pinMap(start, 'Zoom in and put the pin on the gate');
+      if (spot) starEditor({ lat: spot.lat, lon: spot.lon });
+    };
+    if (prefill) { q.value = prefill; run(); }
+    setTimeout(() => q.focus(), 80);
+  }
+
+  // ---- diary on a phone: week strip, day arrows, swipe between days -------------------------------------
+  function renderCalWeek() {
+    const sun = sundayOfKey(calSel), today = todayKey();
+    $('#calWeek').innerHTML = `<button type="button" class="wk-nav" data-w="-7" aria-label="Previous week">‹</button>` +
+      [0, 1, 2, 3, 4, 5, 6].map((i) => {
+        const d = Week.addDays(sun, i), e = dget(d), r = tachoDay(d);
+        const has = (e.stops || []).some((s) => (s.name || s.ref || '').trim()) || e.start || e.finish;
+        return `<button type="button" class="wk-day${d === calSel ? ' sel' : ''}${d === today ? ' today' : ''}" data-date="${d}">
+          <small>${'SMTWTFS'[i]}</small><b>${+d.slice(8)}</b><span class="wk-marks">${r ? '<i class="dot"></i>' : ''}${has ? '<i class="pen"></i>' : ''}${dayExpTotal(d) ? '<i class="cash-dot"></i>' : ''}</span></button>`;
+      }).join('') + `<button type="button" class="wk-nav" data-w="7" aria-label="Next week">›</button>`;
+    $$('#calWeek [data-date]').forEach((b) => b.onclick = () => selectCalDay(b.dataset.date));
+    $$('#calWeek [data-w]').forEach((b) => b.onclick = () => selectCalDay(Week.addDays(calSel, +b.dataset.w)));
+  }
+  function setupSwipe(el, onLeft, onRight) {
+    let x0 = null, y0 = 0;
+    el.addEventListener('touchstart', (e) => {
+      if (e.target.closest('input, textarea, select, .ta-box, .leaflet-container')) { x0 = null; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    }, { passive: true });
+    el.addEventListener('touchend', (e) => {
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+      x0 = null;
+      if (Math.abs(dx) > 70 && Math.abs(dy) < 50) (dx < 0 ? onLeft : onRight)();
+    }, { passive: true });
+  }
+
   // ---- tabs -------------------------------------------------------------------------------------
   function showTab(t) {
     if (!['sheet', 'diary', 'places', 'me'].includes(t)) t = 'sheet';
     $$('main.tab').forEach((m) => m.classList.toggle('on', m.id === 'tab-' + t));
     $$('nav.tabs [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
+    ['sheet', 'diary', 'places', 'me'].forEach((x) => document.body.classList.toggle('tab-' + x, x === t));
     try { localStorage.setItem('tt.tab', t); } catch { /* ignore */ }
     if (location.hash !== '#' + t) history.replaceState(null, '', '#' + t);
     if (t === 'diary') renderCal();

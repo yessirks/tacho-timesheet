@@ -90,6 +90,26 @@
     return out.sort((a, b) => rank(a) - rank(b)).slice(0, 15);
   }
 
+  // Search a name, address or postcode (UK), nearest to you first when we know where you are.
+  async function search(q, near) {
+    const bias = near ? `&lat=${near.lat}&lon=${near.lon}` : '';
+    try {
+      const r = await timed(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=8&lang=en&bbox=-8.7,49.8,2.0,60.9${bias}`, {}, 8000);
+      if (r.ok) {
+        const j = await r.json();
+        const out = (j.features || []).map((f) => {
+          const p = f.properties || {}, [x, y] = f.geometry.coordinates;
+          return { name: p.name || [p.housenumber, p.street].filter(Boolean).join(' ') || p.postcode || '', city: p.city || p.town || p.village || '', sub: [p.street, p.city || p.town || p.village, p.postcode].filter(Boolean).join(', '), lat: y, lon: x };
+        }).filter((r) => r.name);
+        const seen = new Set(), uniq = out.filter((r) => { const k = (r.name + '|' + r.sub).toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+        if (uniq.length) return uniq;
+      }
+    } catch { /* try Nominatim */ }
+    const r = await timed(`https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&countrycodes=gb&limit=8`, {}, 8000);
+    if (!r.ok) throw new Error('search failed');
+    return (await r.json()).map((x) => ({ name: x.name || x.display_name.split(',')[0], sub: x.display_name.split(',').slice(1, 4).join(',').trim(), lat: +x.lat, lon: +x.lon }));
+  }
+
   // ---- reading coordinates out of whatever you paste ---------------------------------------------
   function dms(str) {
     const m = str.match(/(\d+(?:\.\d+)?)\s*°\s*(?:(\d+(?:\.\d+)?)\s*['′]\s*)?(?:(\d+(?:\.\d+)?)\s*["″]\s*)?([NSEW])/gi);
@@ -185,5 +205,5 @@
     return out;
   }
 
-  root.Geo = { distM, fmtDist, here, reverse, nearby, parseCoords, isShortLink, navLinks, toGPX, toKML, toCSV, parseImport, isIOS, isAndroid };
+  root.Geo = { distM, fmtDist, here, reverse, nearby, search, parseCoords, isShortLink, navLinks, toGPX, toKML, toCSV, parseImport, isIOS, isAndroid };
 })(typeof self !== 'undefined' ? self : globalThis);

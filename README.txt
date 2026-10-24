@@ -17,7 +17,8 @@ Diary       a calendar. Write each day's start place, finish place, and a list o
             tacho fills in the rest (times, driving hours, nights out, missing places).
             Bold = written by you, grey = from the tacho, green dot = tacho activity.
 Places      starred places: exact spots like the gate of a drop, with a note (gate, bay…).
-            Add with "Star where I am", a Google Maps link / coordinates, or tap the map.
+            "＋ Add place": search a name or postcode, or paste coordinates (📋), then nudge
+            the pin onto the gate on the satellite map. Or "Star where I am".
             One tap opens Google Maps, Waze or TomTom. Export GPX (TomTom, Garmin) or
             KML (Google My Maps), import them back. Also the saved place names and Base.
 My details  name, address, NI number, declaration, signature, presets (what to fill from
@@ -29,7 +30,9 @@ Weekly use
    and expenses. 📍 finds where you are and suggests the place ("Sainsbury's Paignton"),
    ⭐ starred spots first. 📷 Scan photographs the receipt and crops it to just the paper;
    📎 File adds a photo or PDF you already have. Tap names you've used before; hold one to
-   rename it everywhere, remove it from the list, or star it.
+   rename it everywhere, remove it from the list, or star it. Typing in any place box
+   suggests your ⭐ starred spots first (picking one also saves its exact position).
+   On a phone: swipe left/right to change day, or use the week strip.
 2. Download your driver card (.ddd) and load it ("Load .ddd file", or drop it on the page).
 3. Timesheet tab: pick the week, check it, add expenses ("Add photo" attaches the receipt).
 4. Download PDF (or Share on a phone): timesheet, subsistence claim, then the receipts.

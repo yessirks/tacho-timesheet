@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tacho Timesheet</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -94,6 +94,94 @@
   .places td { padding: 3px 4px; }
   footer { color: var(--muted); font-size: 12px; padding: 0 20px 20px; }
   .hidden { display: none !important; }
+  /* ---------- shared polish ---------- */
+  .btn { transition: transform .08s, background .15s, border-color .15s; }
+  .btn:active, .chip:active, .pick:active, .wk-day:active, .cal-d:active { transform: scale(.97); }
+  nav.tabs .ic { margin-right: 6px; }
+  .load-btn .ic { margin-right: 6px; }
+  .day-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .day-nav h2 { flex: 1; text-align: center; margin: 0; font-size: 16px; }
+  .cal-week { display: none; grid-template-columns: 28px repeat(7, minmax(0, 1fr)) 28px; gap: 4px; margin-top: 10px; align-items: stretch; }
+  .wk-nav { appearance: none; border: 0; background: none; color: var(--muted); font-size: 22px; cursor: pointer; }
+  .wk-day { appearance: none; font: inherit; color: var(--ink); border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 6px 0 5px; display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; }
+  .wk-day small { font-size: 11px; color: var(--muted); }
+  .wk-day b { font-size: 16px; }
+  .wk-day.today b { color: var(--accent); }
+  .wk-day.sel { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .wk-day.sel small { color: inherit; opacity: .8; }
+  .wk-marks { display: flex; gap: 3px; height: 6px; }
+  .wk-marks i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+  .wk-marks .dot { background: var(--ok); } .wk-marks .pen { background: var(--accent); } .wk-marks .cash-dot { background: var(--warn); }
+  .wk-day.sel .wk-marks i { box-shadow: 0 0 0 1.5px var(--accent-ink); }
+  .chip.more { background: none; border-style: dashed; color: var(--muted); }
+  /* type-ahead */
+  .ta-wrap { position: relative; flex: 1; min-width: 0; }
+  .ta-wrap > input { width: 100%; }
+  .ta-box { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 25; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.18); max-height: 46vh; overflow: auto; padding: 4px; }
+  .ta-it { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 9px; cursor: pointer; }
+  .ta-it:hover, .ta-it.on { background: var(--soft); }
+  .ta-ic { font-size: 18px; width: 22px; text-align: center; }
+  .ta-tx { display: flex; flex-direction: column; min-width: 0; }
+  .ta-tx b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ta-tx b u { text-decoration: none; background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 3px; }
+  .ta-tx small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* add place & pin map */
+  .add-ways { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .way { appearance: none; font: inherit; color: var(--ink); background: var(--soft); border: 1px solid var(--line); border-radius: 14px; padding: 14px 10px; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; text-align: center; }
+  .way span { font-size: 26px; } .way small { color: var(--muted); font-size: 12px; }
+  .loc-box { margin-top: 12px; padding: 10px 12px; background: var(--soft); border-radius: 12px; }
+  .sheet.full { height: 92vh; display: flex; flex-direction: column; padding: 12px; }
+  .pin-head { padding: 0 4px 8px; }
+  .pin-map { position: relative; flex: 1; min-height: 240px; border-radius: 12px; overflow: hidden; }
+  .pin-canvas { position: absolute; inset: 0; }
+  .pin-cross { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -100%); font-size: 34px; pointer-events: none; z-index: 500; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+  .pin-bar { display: flex; gap: 8px; align-items: center; padding: 8px 2px; flex-wrap: wrap; }
+  .sheet-foot { margin-top: 12px; justify-content: flex-end; }
+  .sheet { animation: sheet-up .22s ease-out; }
+  @keyframes sheet-up { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+
+  /* ---------- phones: app layout ---------- */
+  @media (max-width: 700px) {
+    body { font-size: 15px; -webkit-tap-highlight-color: transparent; }
+    header { padding: calc(8px + env(safe-area-inset-top)) 14px 8px; gap: 8px; }
+    header h1 { font-size: 17px; flex: 1; }
+    header .card-info { display: none; }
+    body.tab-sheet header .card-info { display: block; order: 3; flex-basis: 100%; font-size: 11.5px; line-height: 1.35; }
+    .load-btn { padding: 6px 10px; } .load-btn .lb { font-size: 13px; }
+    nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 12; margin: 0; gap: 2px; background: var(--panel); border-top: 1px solid var(--line);
+      padding: 5px 6px calc(5px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 16px rgba(0,0,0,.07); flex-basis: auto; }
+    nav.tabs button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; font-size: 11.5px !important; border: 0 !important; border-radius: 12px; white-space: nowrap; }
+    nav.tabs button .ic { font-size: 21px; line-height: 1; margin: 0; filter: grayscale(1); opacity: .65; }
+    nav.tabs button.on { background: var(--soft); }
+    nav.tabs button.on .ic { filter: none; opacity: 1; }
+    main { padding: 10px 10px calc(86px + env(safe-area-inset-bottom)) !important; gap: 10px; }
+    section { border-radius: 16px; padding: 14px; margin-bottom: 10px; border-color: transparent; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    section > h2 { font-size: 15px; flex-wrap: wrap; }
+    section > h2 .sub { flex-basis: 100%; }
+    input, select, textarea { font-size: 16px !important; min-height: 44px; border-radius: 11px; padding: 8px 10px; }
+    textarea { min-height: 70px; }
+    .btn { min-height: 42px; border-radius: 11px; }
+    .btn.small { min-height: 38px; padding: 6px 12px; font-size: 14px; }
+    .btn.link { min-height: 0; }
+    .chip { padding: 6px 12px; font-size: 13.5px; }
+    .grid2 { grid-template-columns: 1fr; }
+    .cal-week { display: grid; }
+    .cal, .month-nav { display: none; }
+    #diary.show-month .cal { display: grid; } #diary.show-month .month-nav { display: flex; }
+    #diary.show-month .cal-week { display: none; }
+    #tab-sheet .preview .actions { bottom: calc(62px + env(safe-area-inset-bottom)) !important; padding: 8px 12px !important; }
+    #tab-sheet { padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important; }
+    #toast { bottom: calc(132px + env(safe-area-inset-bottom)); }
+    .sheet { border-radius: 20px 20px 0 0; padding-top: 22px; position: relative; max-height: 92vh; }
+    .sheet::before { content: ''; position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: var(--line); }
+    .sheet.full { padding-top: 22px; }
+    .star { flex-direction: column; align-items: stretch; }
+    .star-act .btn { flex: 1; justify-content: center; text-align: center; }
+    #map { height: 260px; }
+    .day-head b { min-width: 0; }
+    footer { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
+  }
+  @media (min-width: 701px) { .cal-week { display: none !important; } #calMonthToggle { display: none; } }
   .warn-txt { color: var(--warn); }
   .sheet-ov { position: fixed; inset: 0; background: rgba(10,14,22,.5); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
   .sheet { background: var(--panel); color: var(--ink); width: min(560px, 100%); max-height: 88vh; overflow: auto; border-radius: 14px 14px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(0,0,0,.25); }
@@ -109,7 +197,7 @@
   .stop { grid-template-columns: 110px minmax(0, 1fr) 110px 40px 30px !important; }
   @media (max-width: 600px) {
     .stop { grid-template-columns: 96px minmax(0, 1fr) 44px !important; }
-    .stop [data-s=type] { grid-column: 1; grid-row: 1; } .stop [data-s=name] { grid-column: 2; grid-row: 1; } .stop [data-s=del] { grid-column: 3; grid-row: 1; }
+    .stop [data-s=type] { grid-column: 1; grid-row: 1; } .stop .ta-wrap { grid-column: 2; grid-row: 1; } .stop [data-s=del] { grid-column: 3; grid-row: 1; }
     .stop [data-s=ref] { grid-column: 1 / 3; grid-row: 2; } .stop [data-s=loc] { grid-column: 3; grid-row: 2; }
     .stop { padding-bottom: 6px; border-bottom: 1px dashed var(--line); }
   }
@@ -184,12 +272,12 @@
 <header>
   <h1>Tacho Timesheet</h1>
   <div class="card-info" id="cardInfo">No card file loaded</div>
-  <label class="btn">Load .ddd file<input type="file" id="fileInput" hidden></label>
+  <label class="btn load-btn"><span class="ic">📂</span><span class="lb">Load .ddd file</span><input type="file" id="fileInput" hidden></label>
   <nav class="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="sheet">Timesheet</button>
-    <button type="button" role="tab" data-tab="diary">Diary</button>
-    <button type="button" role="tab" data-tab="places">Places</button>
-    <button type="button" role="tab" data-tab="me">My details</button>
+    <button type="button" role="tab" data-tab="sheet"><span class="ic">📄</span><span class="lb">Timesheet</span></button>
+    <button type="button" role="tab" data-tab="diary"><span class="ic">📅</span><span class="lb">Diary</span></button>
+    <button type="button" role="tab" data-tab="places"><span class="ic">⭐</span><span class="lb">Places</span></button>
+    <button type="button" role="tab" data-tab="me"><span class="ic">👤</span><span class="lb">Me</span></button>
   </nav>
 </header>
 
@@ -270,19 +358,20 @@
     <section id="diary">
       <h2>Diary <span class="sub">Write down each day's places and drops as you go. When you load the .ddd they go straight into the timesheet.</span></h2>
       <div class="row" style="justify-content:space-between">
-        <div class="row"><button class="btn small" id="calPrev">◀</button><b id="calTitle" style="min-width:120px;text-align:center"></b><button class="btn small" id="calNext">▶</button></div>
-        <div class="row"><button class="btn small" id="calToday">Today</button></div>
+        <div class="row month-nav"><button class="btn small" id="calPrev">◀</button><b id="calTitle" style="min-width:120px;text-align:center"></b><button class="btn small" id="calNext">▶</button></div>
+        <div class="row"><button class="btn small" id="calToday">Today</button><button class="btn small" id="calMonthToggle">Month ▾</button></div>
       </div>
+      <div id="calWeek" class="cal-week"></div>
       <div id="cal" class="cal"></div>
       <p class="small muted" style="margin:6px 0 0"><i class="dot"></i> tacho activity · <b>bold</b> = written in your diary · grey = from the tacho</p>
     </section>
 
-    <section>
-      <h2 id="calDate"></h2>
+    <section id="dayEditor">
+      <div class="day-nav"><button type="button" class="btn small" id="calPrevDay" aria-label="Previous day">‹</button><h2 id="calDate"></h2><button type="button" class="btn small" id="calNextDay" aria-label="Next day">›</button></div>
       <div id="calTacho" class="note-tacho small"></div>
       <div class="grid2">
-        <div class="f"><span class="lbl">Start place</span><div class="inp-row"><input id="calStart" list="placeNames" placeholder="e.g. Scorrier"><button type="button" class="btn small loc" id="calStartLoc" title="Use my location">📍</button></div></div>
-        <div class="f"><span class="lbl">Finish place</span><div class="inp-row"><input id="calFinish" list="placeNames" placeholder="e.g. Kepak Merthyr"><button type="button" class="btn small loc" id="calFinishLoc" title="Use my location">📍</button></div></div>
+        <div class="f"><span class="lbl">Start place</span><div class="inp-row"><input id="calStart" placeholder="e.g. Scorrier"><button type="button" class="btn small loc" id="calStartLoc" title="Use my location">📍</button></div></div>
+        <div class="f"><span class="lbl">Finish place</span><div class="inp-row"><input id="calFinish" placeholder="e.g. Kepak Merthyr"><button type="button" class="btn small loc" id="calFinishLoc" title="Use my location">📍</button></div></div>
       </div>
       <h3 class="sub-h">Drops, pickups, coupling</h3>
       <div id="calStops"></div>
@@ -305,9 +394,10 @@
     <section>
       <h2>Starred places <span class="sub">Exact spots, like the gate of a drop. One tap opens Google Maps, Waze or TomTom.</span></h2>
       <div class="actions">
-        <button type="button" class="btn small primary" id="starHere">📍 Star where I am</button>
-        <button type="button" class="btn small" id="starPaste">🔗 From Google Maps link / coordinates</button>
-        <button type="button" class="btn small" id="starPick">🗺 Pick on map</button>
+        <button type="button" class="btn primary" id="starPaste">＋ Add place</button>
+        <button type="button" class="btn" id="starHere">📍 Star where I am</button>
+        <button type="button" class="btn" id="starPick">🛰 Pick on map</button>
+        <button type="button" class="btn small link" id="starBulk">Paste several…</button>
       </div>
       <div id="map"></div>
       <input id="starSearch" placeholder="Search starred places…" style="margin-top:10px">
