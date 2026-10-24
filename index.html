@@ -94,6 +94,41 @@
   .places td { padding: 3px 4px; }
   footer { color: var(--muted); font-size: 12px; padding: 0 20px 20px; }
   .hidden { display: none !important; }
+  .warn-txt { color: var(--warn); }
+  .sheet-ov { position: fixed; inset: 0; background: rgba(10,14,22,.5); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { background: var(--panel); color: var(--ink); width: min(560px, 100%); max-height: 88vh; overflow: auto; border-radius: 14px 14px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(0,0,0,.25); }
+  .sheet.wide { width: min(900px, 100%); }
+  @media (min-width: 700px) { .sheet-ov { align-items: center; } .sheet { border-radius: 14px; } }
+  .sheet h3 { margin: 0 0 10px; font-size: 16px; }
+  .pick-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .pick { appearance: none; font: inherit; color: var(--ink); text-align: left; display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); cursor: pointer; }
+  .pick:hover { border-color: var(--accent); }
+  .inp-row { display: flex; gap: 6px; align-items: center; }
+  .btn.loc { padding: 5px 9px; }
+  .btn.loc.on { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+  .stop { grid-template-columns: 110px minmax(0, 1fr) 110px 40px 30px !important; }
+  @media (max-width: 600px) {
+    .stop { grid-template-columns: 96px minmax(0, 1fr) 44px !important; }
+    .stop [data-s=type] { grid-column: 1; grid-row: 1; } .stop [data-s=name] { grid-column: 2; grid-row: 1; } .stop [data-s=del] { grid-column: 3; grid-row: 1; }
+    .stop [data-s=ref] { grid-column: 1 / 3; grid-row: 2; } .stop [data-s=loc] { grid-column: 3; grid-row: 2; }
+    .stop { padding-bottom: 6px; border-bottom: 1px dashed var(--line); }
+  }
+  .chip { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+  .thumb, .exp-photo .tag { cursor: zoom-in; }
+  #map { height: 340px; border-radius: 10px; border: 1px solid var(--line); margin-top: 12px; background: var(--soft); z-index: 0; }
+  #map.picking { outline: 3px solid var(--accent); cursor: crosshair; }
+  .star-pin { font-size: 22px; line-height: 26px; text-align: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+  #starList { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .star { border: 1px solid var(--line); border-radius: 9px; padding: 10px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
+  .star-act { display: flex; flex-wrap: wrap; gap: 6px; }
+  .leaflet-popup-content .btn { color: var(--ink); }
+  .leaflet-popup-content .btn.primary { color: var(--accent-ink); }
+  .scan-ov { position: fixed; inset: 0; z-index: 40; background: #0b0e14; color: #fff; display: flex; flex-direction: column; }
+  .scan-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
+  .scan-bar span { color: #aab3c5; font-size: 13px; }
+  .scan-bar select { width: auto; }
+  .scan-stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 8px; }
+  .scan-stage canvas { touch-action: none; max-width: 100%; max-height: 100%; }
   h3.sub-h { font-size: 13.5px; margin: 16px 0 6px; }
   .stops { display: flex; flex-direction: column; gap: 6px; }
   .stop { display: grid; grid-template-columns: 110px minmax(0, 1fr) 30px; gap: 6px; align-items: center; }
@@ -128,7 +163,7 @@
   .note-tacho:empty { display: none; }
   .cal-d .t b { color: var(--ink); font-weight: 600; }
   i.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); display: inline-block; vertical-align: middle; }
-  @media (max-width: 600px) { nav.tabs { margin-bottom: -10px; } nav.tabs button { padding: 6px 10px 8px; flex: 1; } }
+  @media (max-width: 600px) { nav.tabs { margin-bottom: -10px; gap: 0; } nav.tabs button { padding: 6px 4px 8px; flex: 1; font-size: 13.5px; white-space: nowrap; } }
   .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
   .cal-h { text-align: center; font-size: 11.5px; color: var(--muted); }
   .cal-d { appearance: none; font: inherit; color: var(--ink); text-align: left; min-height: 58px; padding: 4px 5px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); cursor: pointer; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
@@ -153,6 +188,7 @@
   <nav class="tabs" role="tablist">
     <button type="button" role="tab" data-tab="sheet">Timesheet</button>
     <button type="button" role="tab" data-tab="diary">Diary</button>
+    <button type="button" role="tab" data-tab="places">Places</button>
     <button type="button" role="tab" data-tab="me">My details</button>
   </nav>
 </header>
@@ -245,12 +281,12 @@
       <h2 id="calDate"></h2>
       <div id="calTacho" class="note-tacho small"></div>
       <div class="grid2">
-        <label class="f">Start place<input id="calStart" list="placeNames" placeholder="e.g. Scorrier"></label>
-        <label class="f">Finish place<input id="calFinish" list="placeNames" placeholder="e.g. Kepak Merthyr"></label>
+        <div class="f"><span class="lbl">Start place</span><div class="inp-row"><input id="calStart" list="placeNames" placeholder="e.g. Scorrier"><button type="button" class="btn small loc" id="calStartLoc" title="Use my location">📍</button></div></div>
+        <div class="f"><span class="lbl">Finish place</span><div class="inp-row"><input id="calFinish" list="placeNames" placeholder="e.g. Kepak Merthyr"><button type="button" class="btn small loc" id="calFinishLoc" title="Use my location">📍</button></div></div>
       </div>
       <h3 class="sub-h">Drops, pickups, coupling</h3>
       <div id="calStops"></div>
-      <div class="small muted" style="margin-top:8px">Tap to add one you've used before:</div>
+      <div class="small muted" style="margin-top:8px">Tap to add one you've used before · hold to rename, remove or star it:</div>
       <div id="calChips" class="chips"></div>
       <h3 class="sub-h">Expenses this day <span class="muted small">(parking, tolls, food… add a photo of the receipt)</span></h3>
       <div id="calExp"></div>
@@ -259,6 +295,33 @@
         <button class="btn small" id="calClear">Clear this day</button>
         <button class="btn small primary" id="calOpenWeek">Open this week's timesheet</button>
       </div>
+    </section>
+  </div>
+</main>
+
+<!-- ============ PLACES ============ -->
+<main class="tab single" id="tab-places">
+  <div>
+    <section>
+      <h2>Starred places <span class="sub">Exact spots, like the gate of a drop. One tap opens Google Maps, Waze or TomTom.</span></h2>
+      <div class="actions">
+        <button type="button" class="btn small primary" id="starHere">📍 Star where I am</button>
+        <button type="button" class="btn small" id="starPaste">🔗 From Google Maps link / coordinates</button>
+        <button type="button" class="btn small" id="starPick">🗺 Pick on map</button>
+      </div>
+      <div id="map"></div>
+      <input id="starSearch" placeholder="Search starred places…" style="margin-top:10px">
+      <div id="starList"></div>
+      <div class="actions" style="margin-top:12px">
+        <button type="button" class="btn small" id="starGpx">Export GPX (TomTom, Garmin)</button>
+        <button type="button" class="btn small" id="starKml">Export KML (Google My Maps)</button>
+        <button type="button" class="btn small" id="starCsv">Export CSV</button>
+        <label class="btn small">Import GPX / KML / CSV<input type="file" id="starImport" accept=".gpx,.kml,.csv,.txt" hidden></label>
+      </div>
+    </section>
+    <section>
+      <h2>Saved places <span class="sub">Names used whenever the truck is within the radius. <b>Base</b> decides nights out.</span></h2>
+      <table class="places small" style="width:100%"><thead><tr><th>Base</th><th>Name</th><th>Radius m</th><th></th><th></th></tr></thead><tbody id="placesBody"></tbody></table>
     </section>
   </div>
 </main>
@@ -306,12 +369,9 @@
       <textarea id="emailTpl" rows="8"></textarea>
       <p class="small muted">Fill-ins: {name} {firstName} {weekCommencing} {weekEnding} {vehicle} {days} {nights} {expenses} {daysList} {file}</p>
       <button class="btn small" id="emailReset">Back to default wording</button>
+      <button class="btn small hidden" id="unhideStops"></button>
     </section>
 
-    <section>
-      <h2>Saved places <span class="sub">Names used whenever the truck is within the radius. <b>Base</b> decides nights out.</span></h2>
-      <table class="places small" style="width:100%"><thead><tr><th>Base</th><th>Name</th><th>Radius m</th><th></th><th></th></tr></thead><tbody id="placesBody"></tbody></table>
-    </section>
 
     <section>
       <h2>My data</h2>
@@ -335,6 +395,8 @@
 <script src="tacho.js"></script>
 <script src="week.js"></script>
 <script src="form.js"></script>
+<script src="places.js"></script>
+<script src="scan.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

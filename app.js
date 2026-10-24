@@ -47,6 +47,7 @@
 
   let profile = LS.get('profile', {});
   let places = LS.get('places', []);
+  let stars = LS.get('stars', []);   // starred exact spots (gate entrances): { id, name, lat, lon, note }
   const geo = LS.get('geo', {});
   const diary = LS.get('diary', {});   // "YYYY-MM-DD" -> { start, finish, drops }; shared by the Diary tab and the timesheet
   for (const [d, v] of Object.entries(diary)) diary[d] = normalizeEntry(v);   // older versions kept drops as text
@@ -95,7 +96,9 @@
       return best;
     };
     const mine = pick(places);
-    return mine && mine.name ? mine : (mineOnly ? mine : pick(KNOWN_PLACES) || mine);
+    if (mine && mine.name) return mine;
+    if (mineOnly) return mine;
+    return pick(stars.map((x) => ({ ...x, radius: x.radius || 200 }))) || pick(KNOWN_PLACES) || mine;
   }
   const geoQueue = [], geoFailed = new Set();
   let geoBusy = false;
@@ -433,7 +436,7 @@
       <td class="num"><input data-e="amount" type="number" step="0.01" min="0" value="${esc(e.amount)}"></td>
       <td class="num"><input data-e="vat" type="number" step="0.01" min="0" value="${esc(e.vat)}"></td>
       <td>${e.att ? `${attThumb(e.att)} <button class="btn small link" data-act="unatt" title="Remove receipt">×</button>`
-        : '<label class="btn small">Add photo<input type="file" data-act="att" accept="image/*,application/pdf" hidden></label>'}</td>
+        : '<label class="btn small">📷 Scan<input type="file" data-act="scan" accept="image/*" capture="environment" hidden></label> <label class="btn small">📎 File<input type="file" data-act="att" accept="image/*,application/pdf" hidden></label>'}</td>
       <td><button class="btn small link" data-act="del" title="Delete row">✕</button></td></tr>`).join('')
       || '<tr><td colspan="7" class="muted small">No expenses this week.</td></tr>';
     $$('tr[data-n]', tb).forEach((tr) => {
@@ -446,6 +449,17 @@
         try { e.att = await readAttachment(at.files[0]); } catch (err) { alert(err.message); return; }
         saveWeek(); renderExpenses(); schedulePdf();
       };
+      const sc = $('[data-act="scan"]', tr);
+      if (sc) sc.onchange = async () => {
+        const f = sc.files[0]; sc.value = '';
+        if (!f) return;
+        const scanned = await Scanner.open(f);
+        if (!scanned) return;
+        try { e.att = await readAttachment(scanned); e.att.scanned = true; } catch (err) { alert(err.message); return; }
+        saveWeek(); renderExpenses(); schedulePdf(); toast('Receipt scanned');
+      };
+      const tv = $('.thumb, td .tag', tr);
+      if (tv && e.att) tv.onclick = () => viewAttachment(e.att);
     });
   }
   function renderOther() {
@@ -572,9 +586,10 @@
   const STOP_TYPES = { drop: 'Drop', pickup: 'Pickup', couple: 'Couple', uncouple: 'Uncouple', other: 'Other' };
   // On the timesheet a drop is just its name, like you'd write it; the others say what happened.
   function fmtStop(s) {
-    const name = (s.name || '').trim();
-    if (!name) return '';
-    return (s.type === 'drop' && profile.dropWord !== 'yes') || s.type === 'other' ? name : `${STOP_TYPES[s.type] || ''} ${name}`;
+    const name = (s.name || '').trim(), ref = (s.ref || '').trim();
+    if (!name && !ref) return '';
+    const what = name && ref ? `${name} (${ref})` : name || ref;
+    return (s.type === 'drop' && profile.dropWord !== 'yes') || s.type === 'other' ? what : `${STOP_TYPES[s.type] || ''} ${what}`;
   }
   const fmtStops = (list) => (list || []).map(fmtStop).filter(Boolean).join(', ');
   const gpsStops = (r) => r.drops.map((d) => ({ type: d.op === 1 ? 'pickup' : 'drop', name: label(d.pos) || '…' }));
@@ -587,13 +602,21 @@
       const l = list();
       box.innerHTML = `<div class="stops">${l.map((s, n) => `<div class="stop" data-n="${n}">
           <select data-s="type" aria-label="Type">${Object.entries(STOP_TYPES).map(([k, v]) => `<option value="${k}" ${s.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
-          <input data-s="name" list="placeNames" value="${esc(s.name)}" placeholder="Name, e.g. Torquay Sainsbury's" aria-label="Name">
+          <input data-s="name" list="placeNames" value="${esc(s.name)}" placeholder="Name, e.g. Sainsbury's Paignton" aria-label="Name">
+          <input data-s="ref" value="${esc(s.ref || '')}" placeholder="Trailer / ref" aria-label="Trailer or reference">
+          <button type="button" class="btn small loc${isFinite(s.lat) ? ' on' : ''}" data-s="loc" title="${isFinite(s.lat) ? 'Located. Tap to locate again' : 'Use my location'}">📍</button>
           <button type="button" class="btn small link" data-s="del" title="Remove">✕</button></div>`).join('')}</div>
         <div class="add-row">${['drop', 'pickup', 'couple', 'uncouple'].map((t) => `<button type="button" class="btn small" data-add="${t}">+ ${STOP_TYPES[t]}</button>`).join('')}</div>`;
       $$('.stop', box).forEach((row) => {
         const n = +row.dataset.n;
         $('[data-s=type]', row).onchange = (e) => { const l2 = list(); l2[n].type = e.target.value; save(l2); };
         $('[data-s=name]', row).oninput = (e) => { const l2 = list(); l2[n].name = e.target.value; save(l2); };
+        $('[data-s=ref]', row).oninput = (e) => { const l2 = list(); l2[n].ref = e.target.value; save(l2); };
+        $('[data-s=loc]', row).onclick = () => locatePicker(`📍 Where is this ${(STOP_TYPES[list()[n].type] || 'stop').toLowerCase()}?`, (name, pos) => {
+          const l2 = list(); l2[n].name = name;
+          if (pos) { l2[n].lat = pos.lat; l2[n].lon = pos.lon; }
+          save(l2, true);
+        });
         $('[data-s=del]', row).onclick = () => { const l2 = list(); l2.splice(n, 1); save(l2, true); };
       });
       $$('[data-add]', box).forEach((b) => b.onclick = () => {
@@ -615,12 +638,16 @@
   }
   // Stops you've used before, most used first, for one-tap entry.
   function frequentStops() {
-    const n = new Map();
+    const n = new Map(), hidden = new Set(profile.hiddenStops || []);
     for (const e of Object.values(diary)) for (const s of e.stops || []) {
       const name = (s.name || '').trim();
       if (name.length < 2) continue;
-      const k = s.type + '|' + name.toLowerCase(), v = n.get(k) || { type: s.type, name, c: 0 };
-      v.c++; n.set(k, v);
+      const k = s.type + '|' + name.toLowerCase();
+      if (hidden.has(k)) continue;
+      const v = n.get(k) || { type: s.type, name, c: 0 };
+      v.c++;
+      if (isFinite(s.lat)) { v.lat = s.lat; v.lon = s.lon; }
+      n.set(k, v);
     }
     return [...n.values()].sort((a, b) => b.c - a.c).slice(0, 18);
   }
@@ -653,7 +680,7 @@
           <input data-e="note" value="${esc(e.note)}" placeholder="Note, e.g. Gordano" aria-label="Note">
           <input data-e="amount" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(e.amount)}" placeholder="£" aria-label="Amount">
           <span class="exp-photo">${e.att ? `${attThumb(e.att)}<button type="button" class="btn small link" data-act="unatt" title="Remove photo">✕</button>`
-            : '<label class="btn small">📷 Receipt<input type="file" data-act="att" accept="image/*,application/pdf" hidden></label>'}</span>
+            : '<label class="btn small">📷 Scan<input type="file" data-act="scan" accept="image/*" capture="environment" hidden></label><label class="btn small">📎 File<input type="file" data-act="att" accept="image/*,application/pdf" hidden></label>'}</span>
           <button type="button" class="btn small link" data-act="del" title="Delete">✕</button></div>`).join('') +
         `<div class="add-row">${Object.entries(TYPES).map(([k, v]) => `<button type="button" class="btn small" data-addexp="${k}">+ ${v}</button>`).join('')}</div>` +
         (tot ? `<div class="small" style="margin-top:6px">Total this day: <b>£${tot.toFixed(2)}</b></div>` : '');
@@ -665,8 +692,19 @@
         const at = $('[data-act=att]', row);
         if (at) at.onchange = async () => {
           try { e.att = await readAttachment(at.files[0]); } catch (err) { alert(err.message); return; }
-          saveWeekState(sun); draw(); toast('Receipt photo added');
+          saveWeekState(sun); draw(); toast('Receipt added to this day');
         };
+        const sc = $('[data-act=scan]', row);
+        if (sc) sc.onchange = async () => {
+          const f = sc.files[0]; sc.value = '';
+          if (!f) return;
+          const scanned = await Scanner.open(f);
+          if (!scanned) return;
+          try { e.att = await readAttachment(scanned); e.att.scanned = true; } catch (err) { alert(err.message); return; }
+          saveWeekState(sun); draw(); toast('Receipt scanned and saved to this day');
+        };
+        const tv = $('.exp-photo .thumb, .exp-photo .tag', row);
+        if (tv && e.att) tv.onclick = () => viewAttachment(e.att);
       });
       $$('[data-addexp]', box).forEach((b) => b.onclick = () => {
         w.expenses.push({ id: uid(), day: i, type: b.dataset.addexp, note: '', amount: '', vat: '' });
@@ -698,6 +736,7 @@
     const names = new Set();
     for (const p of places) if (p.name) names.add(p.name);
     for (const p of KNOWN_PLACES) names.add(p.name);
+    for (const p of stars) names.add(p.name);
     for (const e of Object.values(diary)) {
       if (e.start) names.add(e.start);
       if (e.finish) names.add(e.finish);
@@ -751,9 +790,14 @@
     $('#calDate').textContent = `${wd} ${fmtLong(calSel)}`;
     fillCalEditor();
     const ed = stopsEditor($('#calStops'), calSel);
-    $('#calChips').innerHTML = frequentStops().map((s) => `<button type="button" class="chip" data-type="${s.type}">${s.type === 'drop' ? '' : STOP_TYPES[s.type] + ' · '}${esc(s.name)}</button>`).join('')
+    const freq = frequentStops();
+    $('#calChips').innerHTML = freq.map((s) => `<button type="button" class="chip" data-type="${s.type}">${s.type === 'drop' ? '' : STOP_TYPES[s.type] + ' · '}${esc(s.name)}</button>`).join('')
       || '<span class="small muted">Names you add show up here for next time.</span>';
-    $$('#calChips .chip').forEach((c, n) => c.onclick = () => { const s = frequentStops()[n]; ed.add({ type: s.type, name: s.name }); });
+    $$('#calChips .chip').forEach((c, n) => {
+      const s = freq[n];
+      c.onclick = () => ed.add({ type: s.type, name: s.name, ...(isFinite(s.lat) ? { lat: s.lat, lon: s.lon } : {}) });
+      onHold(c, () => chipMenu(s));
+    });
     dayExpensesEditor($('#calExp'), calSel);
   }
   function setupCal() {
@@ -770,6 +814,8 @@
         if (profile.learn !== 'no' && fix && fix.exact && el.value.trim()) { learnPlace(fix.pos, el.value.trim()); weekCache.clear(); renderCalGrid(); refreshAuto(); }
       };
     };
+    $('#calStartLoc').onclick = () => locatePicker('📍 Where did you start?', (name) => { $('#calStart').value = name; setDiary(calSel, 'start', name); });
+    $('#calFinishLoc').onclick = () => locatePicker('📍 Where did you finish?', (name) => { $('#calFinish').value = name; setDiary(calSel, 'finish', name); });
     bind('#calStart', 'start', (r) => r.startFix);
     bind('#calFinish', 'finish', (r) => r.endFix);
     $('#calCopyTacho').onclick = () => {
@@ -826,14 +872,315 @@
     }
   }
 
+  // ---- small UI pieces: sheets and press-and-hold ---------------------------------------------------
+  function sheet(html) {
+    const ov = document.createElement('div');
+    ov.className = 'sheet-ov';
+    ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
+    document.body.appendChild(ov);
+    const el = ov.firstElementChild;
+    const esc_ = (e) => { if (e.key === 'Escape') el.close(); };
+    el.close = () => { ov.remove(); document.removeEventListener('keydown', esc_); };
+    ov.addEventListener('click', (e) => { if (e.target === ov || e.target.closest('[data-close]')) el.close(); });
+    document.addEventListener('keydown', esc_);
+    return el;
+  }
+  // Long press (or right-click) runs fn; the click that ends the press is swallowed.
+  function onHold(el, fn) {
+    let t = null, sx = 0, sy = 0;
+    const cancel = () => { if (t) { clearTimeout(t); t = null; } };
+    el.addEventListener('pointerdown', (e) => {
+      sx = e.clientX; sy = e.clientY;
+      t = setTimeout(() => { t = null; el.dataset.held = '1'; if (navigator.vibrate) navigator.vibrate(25); fn(); }, 550);
+    });
+    el.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - sx, e.clientY - sy) > 10) cancel(); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => el.addEventListener(ev, cancel));
+    el.addEventListener('contextmenu', (e) => { e.preventDefault(); cancel(); el.dataset.held = '1'; fn(); });
+    el.addEventListener('click', (e) => { if (el.dataset.held) { e.stopImmediatePropagation(); e.preventDefault(); delete el.dataset.held; } }, true);
+  }
+  function viewAttachment(att) {
+    const url = URL.createObjectURL(new Blob([att.data], { type: att.mime }));
+    if (att.kind === 'pdf') { window.open(url, '_blank'); return; }
+    const sh = sheet(`<img src="${url}" alt="Receipt" style="max-width:100%;max-height:75vh;display:block;margin:0 auto;border-radius:8px">
+      <div class="actions" style="margin-top:10px;justify-content:flex-end"><button class="btn small" data-close>Close</button></div>`);
+    sh.classList.add('wide');
+  }
+
+  // ---- starred places: exact spots (gate entrances) you can navigate to ---------------------------------
+  let lastPos = null, map = null, mapLayer = null, mapPicking = false;
+  const saveStars = () => { LS.set('stars', stars); updatePlaceList(); if ($('#tab-places').classList.contains('on')) renderPlacesTab(); };
+  function addStar(p) {
+    const same = stars.find((s) => s.name.toLowerCase() === (p.name || '').toLowerCase() && Geo.distM(s, p) < 25);
+    if (same) Object.assign(same, p); else stars.push({ id: uid(), note: '', ...p });
+    saveStars();
+  }
+  function navButtons(p) {
+    const l = Geo.navLinks(p);
+    return `<a class="btn small primary" href="${l.google}" target="_blank" rel="noopener">Google Maps</a>
+      <a class="btn small" href="${l.waze}" target="_blank" rel="noopener">Waze</a>
+      ${l.tomtom ? `<a class="btn small" href="${l.tomtom}">${Geo.isIOS ? 'TomTom' : 'TomTom / other'}</a>` : ''}
+      <button type="button" class="btn small" data-copy="${l.ll}">Copy</button>`;
+  }
+  function bindCopy(root) {
+    $$('[data-copy]', root).forEach((b) => b.onclick = async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); toast('Copied ' + b.dataset.copy); } catch { prompt('Copy these coordinates:', b.dataset.copy); }
+    });
+  }
+  function starEditor(p, onSaved) {
+    const cur = { name: '', note: '', ...p };
+    const sh = sheet(`<h3>${p.id ? 'Edit starred place' : '⭐ Star a place'}</h3>
+      <div class="grid2">
+        <label class="f">Name<input data-f="name" value="${esc(cur.name)}" placeholder="e.g. Sainsbury's Paignton – goods in"></label>
+        <label class="f">Note (gate, bay, phone…)<input data-f="note" value="${esc(cur.note)}" placeholder="e.g. Gate 2 on Torquay Rd, ring bell"></label>
+      </div>
+      <label class="f" style="margin-top:10px">Location: paste a Google Maps link or coordinates<input data-f="paste" placeholder="https://www.google.com/maps/… or 50.4362, -3.5699"></label>
+      <div class="small muted" data-f="where" style="margin-top:6px"></div>
+      <div class="actions" style="margin-top:8px"><button type="button" class="btn small" data-f="here">📍 Use where I am now</button>${p.id ? '<button type="button" class="btn small" data-f="del">Delete</button>' : ''}</div>
+      <div class="actions" style="margin-top:14px;justify-content:flex-end"><button type="button" class="btn small" data-close>Cancel</button><button type="button" class="btn small primary" data-f="save">Save</button></div>`);
+    const where = () => {
+      $('[data-f=where]', sh).innerHTML = isFinite(cur.lat) ? `${cur.lat.toFixed(6)}, ${cur.lon.toFixed(6)} · <a href="${Geo.navLinks(cur).view}" target="_blank" rel="noopener">check on Google Maps</a>`
+        : 'No location yet: paste a link or use where you are.';
+    };
+    where();
+    $('[data-f=paste]', sh).oninput = (e) => {
+      const v = e.target.value, c = Geo.parseCoords(v);
+      if (c) { cur.lat = c.lat; cur.lon = c.lon; if (c.name && !$('[data-f=name]', sh).value) $('[data-f=name]', sh).value = c.name; where(); }
+      else if (Geo.isShortLink(v)) $('[data-f=where]', sh).textContent = 'Short "maps.app.goo.gl" links can\'t be read. In Google Maps, press and hold the exact spot: the coordinates appear at the top. Copy and paste those.';
+    };
+    $('[data-f=here]', sh).onclick = async (e) => {
+      e.target.textContent = 'Finding you…';
+      try { const pos = await Geo.here(); lastPos = pos; cur.lat = pos.lat; cur.lon = pos.lon; where(); e.target.textContent = `📍 Got it (±${Math.round(pos.acc)} m)`; }
+      catch (err) { alert(err.message); e.target.textContent = '📍 Use where I am now'; }
+    };
+    const del = $('[data-f=del]', sh);
+    if (del) del.onclick = () => { if (!confirm('Delete this starred place?')) return; stars = stars.filter((s) => s.id !== p.id); saveStars(); sh.close(); };
+    $('[data-f=save]', sh).onclick = () => {
+      cur.name = $('[data-f=name]', sh).value.trim(); cur.note = $('[data-f=note]', sh).value.trim();
+      if (!cur.name) return alert('Give it a name.');
+      if (!isFinite(cur.lat)) return alert('Add the location: paste a link or coordinates, or use where you are.');
+      if (p.id) Object.assign(stars.find((s) => s.id === p.id), cur); else addStar(cur);
+      saveStars(); sh.close(); toast('⭐ Saved ' + cur.name);
+      if (onSaved) onSaved(cur);
+    };
+    setTimeout(() => $(p.name ? '[data-f=note]' : '[data-f=name]', sh).focus(), 50);
+  }
+
+  // ---- 📍 "where am I?" picker: starred spots, saved places, shops and depots nearby, the town -----------
+  async function locatePicker(title, onPick) {
+    const sh = sheet(`<h3>${esc(title)}</h3>
+      <div class="small muted" data-p="status">Getting your location…</div>
+      <div class="pick-list" data-p="list"></div>
+      <div class="inp-row" style="margin-top:10px"><input data-p="own" list="placeNames" placeholder="Or type a name"><button type="button" class="btn small primary" data-p="use">Use</button></div>
+      <label class="check small" style="margin-top:10px"><input type="checkbox" data-p="star"> ⭐ Also star this exact spot (for sat-nav)</label>
+      <div class="actions" style="margin-top:12px;justify-content:flex-end"><button type="button" class="btn small" data-close>Cancel</button></div>`);
+    let pos = null;
+    const items = [], seen = new Set();
+    const pick = (name, at) => {
+      name = (name || '').trim();
+      if (!name) return;
+      const spot = at || pos;
+      if ($('[data-p=star]', sh).checked && spot) addStar({ name, lat: spot.lat, lon: spot.lon });
+      sh.close();
+      onPick(name, spot ? { lat: spot.lat, lon: spot.lon } : null);
+    };
+    $('[data-p=use]', sh).onclick = () => pick($('[data-p=own]', sh).value);
+    $('[data-p=own]', sh).onkeydown = (e) => { if (e.key === 'Enter') pick(e.target.value); };
+    const draw = () => {
+      $('[data-p=list]', sh).innerHTML = items.map((it, n) => `<button type="button" class="pick" data-n="${n}"><span>${esc(it.name)}</span><span class="small muted">${esc(it.sub)}</span></button>`).join('');
+      $$('[data-p=list] .pick', sh).forEach((b) => b.onclick = () => { const it = items[+b.dataset.n]; pick(it.name, it.exact ? it : null); });
+    };
+    const add = (it) => { const k = it.name.toLowerCase(); if (seen.has(k)) return; seen.add(k); items.push(it); };
+    try { pos = await Geo.here(); lastPos = pos; } catch (e) { $('[data-p=status]', sh).textContent = e.message + ' You can still type a name.'; return; }
+    if (!document.body.contains(sh)) return;
+    $('[data-p=status]', sh).textContent = `Found you (±${Math.round(pos.acc)} m). Pick the place, or type it:`;
+    stars.map((s) => ({ s, d: Geo.distM(pos, s) })).filter((x) => x.d < 400).sort((a, b) => a.d - b.d)
+      .forEach(({ s, d }) => add({ name: s.name, sub: `⭐ starred · ${Geo.fmtDist(d)}`, lat: s.lat, lon: s.lon, exact: true }));
+    const sp = savedAt(pos);
+    if (sp && sp.name) add({ name: sp.name, sub: 'saved place' });
+    draw();
+    $('[data-p=status]', sh).textContent += ' Looking for shops and depots nearby…';
+    let busy = false;
+    const [rev, near] = await Promise.all([Geo.reverse(pos.lat, pos.lon).catch(() => null), Geo.nearby(pos.lat, pos.lon).catch(() => { busy = true; return []; })]);
+    if (!document.body.contains(sh)) return;
+    const town = rev ? rev.town : '';
+    for (const p of near) {
+      const t = p.city || town;
+      add({ name: t && !p.name.toLowerCase().includes(t.toLowerCase()) ? `${p.name} ${t}` : p.name, sub: `${p.kind || 'place'} · ${Geo.fmtDist(p.dist)}` });
+    }
+    if (town) add({ name: town, sub: `town${rev.postcode ? ' · ' + rev.postcode : ''}` });
+    if (rev && rev.road && town) add({ name: `${rev.road}, ${town}`, sub: 'street' });
+    $('[data-p=status]', sh).innerHTML = `Found you (±${Math.round(pos.acc)} m). Pick the place, or type it:` +
+      (busy ? ' <span class="warn-txt">The map server is busy, so shops and depots nearby are missing.</span> <button type="button" class="btn small" data-p="retry">Try again</button>'
+        : near.length ? '' : ' (nothing named nearby on the map)');
+    draw();
+    const retry = $('[data-p=retry]', sh);
+    if (retry) retry.onclick = async () => {
+      retry.textContent = 'Searching…'; retry.disabled = true;
+      try {
+        const more = await Geo.nearby(pos.lat, pos.lon);
+        for (const p of more) { const t = p.city || town; add({ name: t && !p.name.toLowerCase().includes(t.toLowerCase()) ? `${p.name} ${t}` : p.name, sub: `${p.kind || 'place'} · ${Geo.fmtDist(p.dist)}` }); }
+        items.sort((a, b) => (a.exact ? -1 : 0) - (b.exact ? -1 : 0));
+        retry.remove(); draw();
+      } catch { retry.textContent = 'Still busy, try again'; retry.disabled = false; }
+    };
+  }
+
+  // ---- hold a suggestion chip: rename everywhere, hide, or star -------------------------------------------
+  function chipMenu(s) {
+    const sh = sheet(`<h3>${esc(s.name)}</h3>
+      <div class="grid2">
+        <label class="f">Type<select data-c="type">${Object.entries(STOP_TYPES).map(([k, v]) => `<option value="${k}" ${s.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label class="f">Name<input data-c="name" value="${esc(s.name)}"></label>
+      </div>
+      <p class="small muted">"Save everywhere" changes it in every day of your diary that uses it.</p>
+      <div class="actions" style="justify-content:flex-end">
+        <button type="button" class="btn small" data-c="hide">Remove from list</button>
+        <button type="button" class="btn small" data-c="star">⭐ Star it</button>
+        <button type="button" class="btn small" data-close>Cancel</button>
+        <button type="button" class="btn small primary" data-c="save">Save everywhere</button></div>`);
+    $('[data-c=save]', sh).onclick = () => {
+      const name = $('[data-c=name]', sh).value.trim(), type = $('[data-c=type]', sh).value;
+      if (!name) return;
+      let n = 0;
+      for (const e of Object.values(diary)) for (const x of e.stops || []) {
+        if (x.type === s.type && (x.name || '').trim().toLowerCase() === s.name.toLowerCase()) { x.name = name; x.type = type; n++; }
+      }
+      LS.set('diary', diary); sh.close(); renderCal(); if (ws) refreshAuto(); updatePlaceList();
+      toast(`Changed ${n} entr${n === 1 ? 'y' : 'ies'}`);
+    };
+    $('[data-c=hide]', sh).onclick = () => {
+      profile.hiddenStops = [...new Set([...(profile.hiddenStops || []), s.type + '|' + s.name.toLowerCase()])];
+      LS.set('profile', profile); sh.close(); renderCal(); showHiddenCount();
+      toast('Removed from the list (your diary is unchanged)');
+    };
+    $('[data-c=star]', sh).onclick = () => { sh.close(); starEditor({ name: s.name, ...(isFinite(s.lat) ? { lat: s.lat, lon: s.lon } : {}) }); };
+  }
+  function showHiddenCount() {
+    const n = (profile.hiddenStops || []).length, b = $('#unhideStops');
+    if (!b) return;
+    b.classList.toggle('hidden', !n);
+    b.textContent = `Show ${n} removed suggestion${n === 1 ? '' : 's'} again`;
+  }
+
+  // ---- Places tab ----------------------------------------------------------------------------------------
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+      document.head.appendChild(css);
+      const js = document.createElement('script');
+      js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+      js.onload = res; js.onerror = () => rej(new Error('map unavailable offline'));
+      document.head.appendChild(js);
+    });
+  }
+  function renderStarList() {
+    const q = ($('#starSearch').value || '').toLowerCase();
+    const list = stars.filter((s) => !q || (s.name + ' ' + s.note).toLowerCase().includes(q))
+      .map((s) => ({ s, d: lastPos ? Geo.distM(lastPos, s) : null }))
+      .sort((a, b) => (a.d !== null ? a.d - b.d : a.s.name.localeCompare(b.s.name)));
+    $('#starList').innerHTML = list.map(({ s, d }) => `<div class="star" data-id="${s.id}">
+        <div class="star-main"><b>⭐ ${esc(s.name)}</b>${s.note ? `<div class="small">${esc(s.note)}</div>` : ''}
+          <div class="small muted">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}${d !== null ? ' · ' + Geo.fmtDist(d) + ' away' : ''}</div></div>
+        <div class="star-act">${navButtons(s)}<button type="button" class="btn small" data-edit>Edit</button><button type="button" class="btn small" data-show>Map</button></div></div>`).join('')
+      || `<p class="small muted">${stars.length ? 'Nothing matches.' : 'No starred places yet. Star the exact gate of a drop with "Star where I am", a Google Maps link, or by picking it on the map.'}</p>`;
+    bindCopy($('#starList'));
+    $$('#starList .star').forEach((el) => {
+      const s = stars.find((x) => x.id === el.dataset.id);
+      $('[data-edit]', el).onclick = () => starEditor(s);
+      $('[data-show]', el).onclick = () => { if (map) { map.setView([s.lat, s.lon], 17); $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' }); } };
+    });
+  }
+  async function renderMap() {
+    try { await loadLeaflet(); } catch { $('#map').innerHTML = '<p class="small muted" style="padding:12px">The map needs an internet connection.</p>'; return; }
+    if (!map) {
+      map = L.map('map', { zoomControl: true }).setView([52.4, -2.5], 6);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+      mapLayer = L.layerGroup().addTo(map);
+      map.on('click', (e) => {
+        if (!mapPicking) return;
+        setPicking(false);
+        starEditor({ lat: e.latlng.lat, lon: e.latlng.lng });
+      });
+      const pts = [...stars, ...places].map((p) => [p.lat, p.lon]);
+      if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 14 });
+    }
+    setTimeout(() => map.invalidateSize(), 50);
+    mapLayer.clearLayers();
+    for (const p of places) {
+      L.circle([p.lat, p.lon], { radius: p.radius || 500, color: p.base ? '#1d7a46' : '#1f4fbf', weight: 1.5, fillOpacity: 0.12 })
+        .bindTooltip(p.name || (p.base ? 'Base' : 'Saved place')).addTo(mapLayer);
+    }
+    for (const s of stars) {
+      const m = L.marker([s.lat, s.lon], { icon: L.divIcon({ className: 'star-pin', html: '⭐', iconSize: [26, 26], iconAnchor: [13, 13] }) });
+      const box = document.createElement('div');
+      box.innerHTML = `<b>${esc(s.name)}</b>${s.note ? `<div>${esc(s.note)}</div>` : ''}<div class="actions" style="margin-top:6px">${navButtons(s)}<button type="button" class="btn small" data-edit>Edit</button></div>`;
+      bindCopy(box);
+      $('[data-edit]', box).onclick = () => starEditor(s);
+      m.bindPopup(box).addTo(mapLayer);
+    }
+    if (lastPos) L.circleMarker([lastPos.lat, lastPos.lon], { radius: 7, color: '#fff', weight: 2, fillColor: '#1f4fbf', fillOpacity: 1 }).bindTooltip('You').addTo(mapLayer);
+  }
+  function setPicking(on) {
+    mapPicking = on;
+    $('#starPick').classList.toggle('primary', on);
+    $('#starPick').textContent = on ? 'Tap the map… (cancel)' : '🗺 Pick on map';
+    $('#map').classList.toggle('picking', on);
+  }
+  function renderPlacesTab() { renderStarList(); renderMap(); renderPlaces(); }
+  function setupPlaces() {
+    $('#starSearch').oninput = renderStarList;
+    $('#starHere').onclick = () => locatePicker('⭐ Star where I am: what is this place?', (name, pos) => {
+      if (!pos) return alert('No location, so nothing was starred.');
+      addStar({ name, lat: pos.lat, lon: pos.lon }); toast('⭐ Saved ' + name);
+      const s = stars.find((x) => x.name === name && Geo.distM(x, pos) < 25);
+      if (s) starEditor(s);   // straight into the note: gate, bay, phone…
+    });
+    $('#starPaste').onclick = () => {
+      const sh = sheet(`<h3>Add from Google Maps</h3>
+        <p class="small muted">In Google Maps, press and hold the exact spot (e.g. the gate), then copy the coordinates shown at the top, or use Share › Copy link and open it in the browser to get the long link. One place per line; you can paste several, like <i>Sainsbury's Paignton gate, 50.4362, -3.5699</i>.</p>
+        <textarea data-s="txt" rows="5" placeholder="50.4362, -3.5699&#10;https://www.google.com/maps/place/…"></textarea>
+        <div class="small muted" data-s="info" style="margin-top:6px"></div>
+        <div class="actions" style="margin-top:10px;justify-content:flex-end"><button type="button" class="btn small" data-close>Cancel</button><button type="button" class="btn small primary" data-s="go">Next</button></div>`);
+      const read = () => Geo.parseImport($('[data-s=txt]', sh).value, '');
+      $('[data-s=txt]', sh).oninput = () => {
+        const v = $('[data-s=txt]', sh).value, n = read().length;
+        $('[data-s=info]', sh).textContent = Geo.isShortLink(v) && !n ? 'Short "maps.app.goo.gl" links can\'t be read here. Copy the coordinates instead (press and hold the spot in Google Maps).' : n ? `Found ${n} place${n > 1 ? 's' : ''}.` : '';
+      };
+      $('[data-s=go]', sh).onclick = () => {
+        const list = read();
+        if (!list.length) return alert('No coordinates found in that.');
+        sh.close();
+        if (list.length === 1) { const p = list[0]; starEditor({ name: p.name === 'Imported place' ? '' : p.name, note: p.note, lat: p.lat, lon: p.lon }); return; }
+        list.forEach(addStar); toast(`⭐ Added ${list.length} places`);
+      };
+    };
+    $('#starPick').onclick = () => setPicking(!mapPicking);
+    const dl = (txt, type, ext) => download(new Blob([txt], { type }), `starred-places-${todayKey()}.${ext}`);
+    $('#starGpx').onclick = () => dl(Geo.toGPX(stars), 'application/gpx+xml', 'gpx');
+    $('#starKml').onclick = () => dl(Geo.toKML(stars), 'application/vnd.google-earth.kml+xml', 'kml');
+    $('#starCsv').onclick = () => dl(Geo.toCSV(stars), 'text/csv', 'csv');
+    $('#starImport').onchange = async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const list = Geo.parseImport(await f.text(), f.name);
+      e.target.value = '';
+      if (!list.length) return alert('No places found in that file.');
+      list.forEach(addStar); toast(`⭐ Imported ${list.length} places`);
+    };
+    $('#unhideStops').onclick = () => { delete profile.hiddenStops; LS.set('profile', profile); showHiddenCount(); renderCal(); toast('Suggestions are back'); };
+    showHiddenCount();
+  }
+
   // ---- tabs -------------------------------------------------------------------------------------
   function showTab(t) {
-    if (!['sheet', 'diary', 'me'].includes(t)) t = 'sheet';
+    if (!['sheet', 'diary', 'places', 'me'].includes(t)) t = 'sheet';
     $$('main.tab').forEach((m) => m.classList.toggle('on', m.id === 'tab-' + t));
     $$('nav.tabs [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
     try { localStorage.setItem('tt.tab', t); } catch { /* ignore */ }
     if (location.hash !== '#' + t) history.replaceState(null, '', '#' + t);
     if (t === 'diary') renderCal();
+    if (t === 'places') renderPlacesTab();
     if (t === 'sheet') schedulePdf();
     window.scrollTo(0, 0);
   }
@@ -861,7 +1208,7 @@
   async function exportAll() {
     const weeks = {};
     for (const [k, v] of await idb.entries()) if (String(k).startsWith('week:')) weeks[k] = stripPhotos(v);
-    const data = { app: 'tacho-timesheet', version: 2, exported: new Date().toISOString(), profile, places, diary, geo, weeks };
+    const data = { app: 'tacho-timesheet', version: 3, exported: new Date().toISOString(), profile, places, stars, diary, geo, weeks };
     download(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }), `tacho-timesheet-data-${todayKey()}.json`);
   }
   async function importAll(file) {
@@ -882,6 +1229,7 @@
       LS.set('diary', diary);
     }
     if (j.geo) { Object.assign(geo, j.geo); LS.set('geo', geo); }
+    if (j.stars) j.stars.forEach(addStar);
     for (const [k, v] of Object.entries(j.weeks || {})) {
       const cur = await idb.get(k);
       if (!cur) { await idb.set(k, v); continue; }
@@ -1052,7 +1400,7 @@
       navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch((e) => console.warn('offline mode unavailable', e));
     }
     $('#downloadBlank').onclick = async () => download(new Blob([await TimesheetPDF.build({})], { type: 'application/pdf' }), 'TC_timesheet_blank.pdf');
-    setupSignature(); setupSettings(); setupFill(); setupCal(); setupEmail(); renderPlaces(); setupTabs(); setupStorage();
+    setupSignature(); setupSettings(); setupFill(); setupCal(); setupEmail(); renderPlaces(); setupPlaces(); setupTabs(); setupStorage();
     window.TachoTimesheetDebug = { buildData, get card() { return card; } };
     idb.get('card').then((c) => c ? loadCard(c.bytes, c.name, false) : buildWeekList()).catch(() => buildWeekList());
   }

@@ -16,13 +16,20 @@ Diary       a calendar. Write each day's start place, finish place, and a list o
             When you load the .ddd, your diary goes straight into the timesheet and the
             tacho fills in the rest (times, driving hours, nights out, missing places).
             Bold = written by you, grey = from the tacho, green dot = tacho activity.
+Places      starred places: exact spots like the gate of a drop, with a note (gate, bay…).
+            Add with "Star where I am", a Google Maps link / coordinates, or tap the map.
+            One tap opens Google Maps, Waze or TomTom. Export GPX (TomTom, Garmin) or
+            KML (Google My Maps), import them back. Also the saved place names and Base.
 My details  name, address, NI number, declaration, signature, presets (what to fill from
             the tacho, email wording), saved places, and your data (download/restore).
 
 Weekly use
 ----------
-1. During the week: Diary tab, tap the day, add places, drops/pickups and expenses
-   (snap the receipt with "📷 Receipt"; tap names you've used before).
+1. During the week: Diary tab, tap the day, add places, drops/pickups (with trailer number)
+   and expenses. 📍 finds where you are and suggests the place ("Sainsbury's Paignton"),
+   ⭐ starred spots first. 📷 Scan photographs the receipt and crops it to just the paper;
+   📎 File adds a photo or PDF you already have. Tap names you've used before; hold one to
+   rename it everywhere, remove it from the list, or star it.
 2. Download your driver card (.ddd) and load it ("Load .ddd file", or drop it on the page).
 3. Timesheet tab: pick the week, check it, add expenses ("Add photo" attaches the receipt).
 4. Download PDF (or Share on a phone): timesheet, subsistence claim, then the receipts.
