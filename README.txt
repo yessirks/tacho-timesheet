@@ -28,7 +28,9 @@ Weekly use
 ----------
 1. During the week: Diary tab, tap the day, add places, drops/pickups (with trailer number)
    and expenses. 📍 finds where you are and suggests the place ("Sainsbury's Paignton"),
-   ⭐ starred spots first. 📷 Scan photographs the receipt and crops it to just the paper;
+   ⭐ starred spots first. 📷 Scan: 1) crop (auto edges, magnifier on the corners, rotate),
+   2) enhance (Colour / Greyscale / B&W / Original, brightness, contrast, "＋ Add part" for a
+   long receipt, "🔍 Read total" fills the amount and VAT), then Save;
    📎 File adds a photo or PDF you already have. Tap names you've used before; hold one to
    rename it everywhere, remove it from the list, or star it. Typing in any place box
    suggests your ⭐ starred spots first (picking one also saves its exact position).

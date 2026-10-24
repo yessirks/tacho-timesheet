@@ -425,6 +425,14 @@
     t.width = Math.round(cv.width * tk); t.height = Math.round(cv.height * tk); t.getContext('2d').drawImage(cv, 0, 0, t.width, t.height);
     return { id: uid(), name: file.name, mime: 'image/jpeg', kind: 'image', data: await blob.arrayBuffer(), thumb: t.toDataURL('image/jpeg', 0.7) };
   }
+  // "Read total" in the scanner fills an empty amount / VAT.
+  function applyScanInfo(e, info) {
+    if (!info) return '';
+    const said = [];
+    if (info.amount && !parseFloat(e.amount)) { e.amount = info.amount.toFixed(2); said.push('£' + e.amount); }
+    if (info.vat && !parseFloat(e.vat)) { e.vat = info.vat.toFixed(2); said.push('VAT £' + e.vat); }
+    return said.length ? ' · read ' + said.join(', ') : '';
+  }
   const attThumb = (a) => a.kind === 'pdf' ? '<span class="tag">PDF</span>' : `<img class="thumb" src="${a.thumb}" alt="">`;
 
   function renderExpenses() {
@@ -457,7 +465,8 @@
         const scanned = await Scanner.open(f);
         if (!scanned) return;
         try { e.att = await readAttachment(scanned); e.att.scanned = true; } catch (err) { alert(err.message); return; }
-        saveWeek(); renderExpenses(); schedulePdf(); toast('Receipt scanned');
+        const read = applyScanInfo(e, scanned.scanInfo);
+        saveWeek(); renderExpenses(); schedulePdf(); toast('Receipt scanned' + read);
       };
       const tv = $('.thumb, td .tag', tr);
       if (tv && e.att) tv.onclick = () => viewAttachment(e.att);
@@ -706,7 +715,8 @@
           const scanned = await Scanner.open(f);
           if (!scanned) return;
           try { e.att = await readAttachment(scanned); e.att.scanned = true; } catch (err) { alert(err.message); return; }
-          saveWeekState(sun); draw(); toast('Receipt scanned and saved to this day');
+          const read = applyScanInfo(e, scanned.scanInfo);
+          saveWeekState(sun); draw(); toast('Receipt saved to this day' + read);
         };
         const tv = $('.exp-photo .thumb, .exp-photo .tag', row);
         if (tv && e.att) tv.onclick = () => viewAttachment(e.att);
