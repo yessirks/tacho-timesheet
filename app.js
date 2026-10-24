@@ -42,6 +42,14 @@
   let profile = LS.get('profile', {});
   let places = LS.get('places', []);
   const geo = LS.get('geo', {});
+  const diary = LS.get('diary', {});   // "YYYY-MM-DD" -> drops text; shared by the diary calendar and the timesheet
+  // Sites that OpenStreetMap doesn't name well. Your own saved places win over these.
+  const KNOWN_PLACES = [
+    { name: 'Trewithen Dairy', lat: 50.4434, lon: -4.6394, radius: 700 },
+    { name: 'Dunbia Treburley', lat: 50.5753, lon: -4.3330, radius: 900 },
+    { name: 'Ornua Foods Leek', lat: 53.0961, lon: -2.0348, radius: 600 },
+    { name: 'Gordano Services', lat: 51.4762, lon: -2.7080, radius: 600 },
+  ];
   let card = null, prep = null, week = null, weekKey = null, ws = null;
 
   // ---- dates ----------------------------------------------------------------
@@ -55,10 +63,14 @@
   // ---- places / geocoding ---------------------------------------------------
   const geoKey = (p) => p.lat.toFixed(3) + ',' + p.lon.toFixed(3);
   const basePlace = () => places.find((p) => p.base) || null;
-  function savedAt(pos) {
-    let best = null, bd = Infinity;
-    for (const p of places) { const d = Week.distKm(p, pos) * 1000; if (d <= (p.radius || 500) && d < bd) { best = p; bd = d; } }
-    return best;
+  function savedAt(pos, mineOnly) {
+    const pick = (list) => {
+      let best = null, bd = Infinity;
+      for (const p of list) { const d = Week.distKm(p, pos) * 1000; if (d <= (p.radius || 500) && d < bd) { best = p; bd = d; } }
+      return best;
+    };
+    const mine = pick(places);
+    return mine && mine.name ? mine : (mineOnly ? mine : pick(KNOWN_PLACES) || mine);
   }
   const geoQueue = [], geoFailed = new Set();
   let geoBusy = false;
@@ -104,7 +116,7 @@
     setStatus('');
   }
   function learnPlace(pos, name) {
-    const sp = savedAt(pos);
+    const sp = savedAt(pos, true);
     if (sp) sp.name = name; else places.push({ id: uid(), name, lat: pos.lat, lon: pos.lon, radius: 500, base: false });
     LS.set('places', places);
     renderPlaces();
@@ -128,14 +140,15 @@
     });
   }
   function autoDay(i) {
-    const r = week && week.rows[i];
-    if (!r || !r.startTime) return { startTime: '', finishTime: '', startPlace: '', finishPlace: '', drops: '', nightOut: '', driving: '', stayed: '' };
+    const r = week && week.rows[i], noted = diary[Week.addDays(weekKey, i)] || '';
+    if (!r || !r.startTime) return { startTime: '', finishTime: '', startPlace: '', finishPlace: '', drops: noted, nightOut: '', driving: '', stayed: '' };
     // Only exact positions are filled in; rough ones are shown as a hint in the empty field.
     const at = (fix) => (on('places') && fix && fix.exact ? label(fix.pos) : '');
     return {
       startTime: on('times') ? r.startTime : '', finishTime: on('times') ? r.finishTime : '',
       startPlace: at(r.startFix), finishPlace: at(r.endFix),
-      drops: on('drops') ? r.drops.map((d) => (d.op === 1 ? 'Load ' : '') + (label(d.pos) || '…')).join(', ') : '',
+      // What you wrote in the diary wins; otherwise the Load/Unload GPS entries from the tacho.
+      drops: noted || (on('drops') ? r.drops.map((d) => (d.op === 1 ? 'Load ' : '') + (label(d.pos) || '…')).join(', ') : ''),
       nightOut: on('nightOut') ? r.nightOut : '', driving: on('driving') ? r.driving : '', stayed: '',
     };
   }
@@ -213,9 +226,17 @@
     weekKey = key;
     week = card ? Week.computeWeek(card, prep, key, { base: basePlace(), awayKm: +profile.awayKm || 25 }) : null;
     ws = (await idb.get('week:' + key)) || { days: [{}, {}, {}, {}, {}, {}, {}], foot: {}, expenses: [], other: [] };
+    ws.days.forEach((o, i) => {   // drops used to be saved per week; they live in the diary now
+      if (!('drops' in o)) return;
+      const d = Week.addDays(key, i);
+      if (o.drops.trim() && !diary[d]) setDiary(d, o.drops);
+      delete o.drops; saveWeek();
+    });
     const n = week ? week.rows.filter((r) => r.startTime).length : 0;
     $('#weekInfo').textContent = `${fmtShort(key)} – ${fmtShort(Week.addDays(key, 6))}` + (card ? ` · ${n} day${n === 1 ? '' : 's'} on the tacho` : ' · no card loaded: fill in by hand');
     renderDays(); renderFoot(); renderExpenses(); renderOther();
+    if (!calSel || !inWeek(calSel)) { calSel = inWeek(todayKey()) ? todayKey() : key; calMonth = calSel.slice(0, 7); }
+    renderCal();
     schedulePdf();
   }
 
@@ -229,7 +250,7 @@
     for (let i = 0; i < 7; i++) {
       const r = week && week.rows[i], date = Week.addDays(weekKey, i);
       const el = document.createElement('div');
-      const has = !!(r && r.startTime), edited = Object.keys(ws.days[i] || {}).length > 0;
+      const has = !!(r && r.startTime), edited = Object.keys(ws.days[i] || {}).length > 0 || !!diary[date];
       el.className = 'day' + (has ? '' : ' off') + (has || edited ? '' : ' collapsed');
       const tags = [];
       if (r && r.shifts.length > 1) tags.push(`<span class="tag warn">${r.shifts.length} shifts merged</span>`);
@@ -275,7 +296,7 @@
     $$('[data-d]', box).forEach((inp) => {
       const i = +inp.dataset.d, k = inp.dataset.k;
       inp.addEventListener('input', () => {
-        ws.days[i][k] = inp.value;
+        if (k === 'drops') setDiary(Week.addDays(weekKey, i), inp.value); else ws.days[i][k] = inp.value;
         inp.classList.add('edited'); inp.classList.remove('auto');
         saveWeek(); refreshFoot(); schedulePdf();
       });
@@ -300,7 +321,8 @@
   function refreshAuto(force) {
     if (!ws) return;
     $$('[data-d]').forEach((inp) => {
-      const i = +inp.dataset.d, k = inp.dataset.k, edited = k in (ws.days[i] || {});
+      const i = +inp.dataset.d, k = inp.dataset.k;
+      const edited = k === 'drops' ? !!diary[Week.addDays(weekKey, i)] : k in (ws.days[i] || {});
       if (!force && document.activeElement === inp) return;
       const v = dayVal(i, k);
       if (inp.value !== v) inp.value = v;
@@ -475,12 +497,22 @@
     $('#setGeo').onchange = (e) => { profile.geocode = e.target.value; LS.set('profile', profile); refreshAuto(); };
     $('#setLearn').onchange = (e) => { profile.learn = e.target.value; LS.set('profile', profile); };
     $('#setAway').onchange = (e) => { profile.awayKm = +e.target.value || 25; LS.set('profile', profile); if (weekKey) selectWeek(weekKey); };
-    $('#exportSettings').onclick = () => download(new Blob([JSON.stringify({ profile, places, geo }, null, 1)], { type: 'application/json' }), 'tacho-timesheet-settings.json');
+    $('#exportSettings').onclick = () => download(new Blob([JSON.stringify({ profile, places, geo, diary }, null, 1)], { type: 'application/json' }), 'tacho-timesheet-settings.json');
     $('#importSettings').onchange = async (e) => {
       try {
         const j = JSON.parse(await e.target.files[0].text());
-        if (j.profile) { profile = j.profile; LS.set('profile', profile); }
-        if (j.places) { places = j.places; LS.set('places', places); }
+        // Merge, so restoring never wipes a signature or places already on this device.
+        if (j.profile) { profile = { ...profile, ...j.profile }; LS.set('profile', profile); }
+        if (j.places) {
+          for (const p of j.places) {
+            const same = places.find((q) => Week.distKm(q, p) < 0.2);
+            if (same) Object.assign(same, p); else places.push(p);
+          }
+          const b = j.places.find((p) => p.base);
+          if (b) places.forEach((q) => { q.base = Week.distKm(q, b) < 0.2; });
+          LS.set('places', places);
+        }
+        if (j.diary) { Object.assign(diary, j.diary); LS.set('diary', diary); }
         if (j.geo) { Object.assign(geo, j.geo); LS.set('geo', geo); }
         location.reload();
       } catch (err) { alert('That file could not be read: ' + err.message); }
@@ -488,6 +520,112 @@
     $('#resetWeek').onclick = () => {
       if (!confirm('Clear your edits to the days and totals for this week? Expenses and photos are kept.')) return;
       ws.days = [{}, {}, {}, {}, {}, {}, {}]; ws.foot = {}; saveWeek(); refreshAuto(true); refreshFoot(true);
+    };
+  }
+
+  // ---- drops diary (calendar) ----------------------------------------------------------------
+  let calMonth = null, calSel = null;
+  const inWeek = (d) => weekKey && d >= weekKey && d <= Week.addDays(weekKey, 6);
+  function setDiary(date, text) {
+    if (text && text.trim()) diary[date] = text; else delete diary[date];
+    LS.set('diary', diary);
+    if (calMonth) renderCalGrid();
+    if (date === calSel && document.activeElement !== $('#calText')) $('#calText').value = diary[date] || '';
+  }
+  // Drop names you've used before, most used first, for one-tap entry.
+  function frequentDrops() {
+    const n = new Map();
+    for (const t of Object.values(diary)) for (const raw of t.split(/[,\n]+/)) {
+      const x = raw.trim(); if (x.length < 2) continue;
+      const k = x.toLowerCase(), e = n.get(k) || { name: x, c: 0 }; e.c++; n.set(k, e);
+    }
+    return [...n.values()].sort((a, b) => b.c - a.c).slice(0, 18).map((e) => e.name);
+  }
+  function shiftDays() {
+    const set = new Set();
+    if (prep) for (const s of prep.shifts) set.add(Week.localKey(s.cardIn || s.start));
+    return set;
+  }
+  function renderCalGrid() {
+    const [y, m] = calMonth.split('-').map(Number);
+    $('#calTitle').textContent = `${MONTHS[m - 1]} ${y}`;
+    const first = `${calMonth}-01`, start = Week.addDays(first, -new Date(Date.UTC(y, m - 1, 1)).getUTCDay());
+    const worked = shiftDays(), today = todayKey();
+    let html = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => `<div class="cal-h">${d}</div>`).join('');
+    for (let i = 0; i < 42; i++) {
+      const d = Week.addDays(start, i);
+      if (i === 35 && d.slice(0, 7) !== calMonth) break;
+      const cls = ['cal-d', d.slice(0, 7) !== calMonth ? 'other' : '', d === calSel ? 'sel' : '', d === today ? 'today' : '', inWeek(d) ? 'wk' : ''].join(' ');
+      html += `<button type="button" class="${cls}" data-date="${d}"><span class="n">${+d.slice(8)}${worked.has(d) ? '<i class="dot" title="Tacho activity"></i>' : ''}</span>` +
+        `<span class="t">${esc((diary[d] || '').slice(0, 40))}</span></button>`;
+    }
+    $('#cal').innerHTML = html;
+    $$('#cal [data-date]').forEach((b) => b.onclick = () => selectCalDay(b.dataset.date));
+  }
+  function selectCalDay(d) {
+    calSel = d;
+    calMonth = d.slice(0, 7);
+    renderCal();
+  }
+  function renderCal() {
+    if (!calMonth) return;
+    renderCalGrid();
+    const wd = DAYS[new Date(Date.parse(calSel)).getUTCDay()];
+    $('#calDate').textContent = `${wd} ${fmtLong(calSel)}`;
+    $('#calText').value = diary[calSel] || '';
+    $('#calChips').innerHTML = frequentDrops().map((n) => `<button type="button" class="chip">${esc(n)}</button>`).join('');
+    $$('#calChips .chip').forEach((c) => c.onclick = () => {
+      const ta = $('#calText');
+      ta.value = ta.value.trim() ? ta.value.replace(/[,\s]*$/, '') + ', ' + c.textContent : c.textContent;
+      ta.dispatchEvent(new Event('input'));
+    });
+  }
+  function setupCal() {
+    calSel = todayKey(); calMonth = calSel.slice(0, 7);
+    const move = (n) => { const [y, m] = calMonth.split('-').map(Number); calMonth = new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7); renderCalGrid(); };
+    $('#calPrev').onclick = () => move(-1);
+    $('#calNext').onclick = () => move(1);
+    $('#calToday').onclick = () => selectCalDay(todayKey());
+    $('#calText').oninput = (e) => {
+      setDiary(calSel, e.target.value);
+      if (inWeek(calSel)) { refreshAuto(); schedulePdf(); }
+    };
+    $('#calOpenWeek').onclick = () => {
+      const s = Week.sundayOf(Date.parse(calSel + 'T12:00:00Z')), sel = $('#weekSel');
+      if (![...sel.options].some((o) => o.value === s)) sel.add(new Option(`w/c Sunday ${fmtLong(s)}`, s), 0);
+      sel.value = s; selectWeek(s);
+      $('#days').scrollIntoView({ behavior: 'smooth' });
+    };
+  }
+
+  // ---- email text ---------------------------------------------------------------------------
+  const DEFAULT_EMAIL = 'Hello,\n\nPlease find attached my timesheet for the week commencing {weekCommencing} (vehicle {vehicle}).\n\n' +
+    'Days worked: {days}. Nights out: {nights}. Expenses: £{expenses}.\n\nKind regards,\n{name}';
+  function emailText() {
+    if (!ws) return '';
+    const d = buildData(), days = d.p1.days;
+    const list = days.map((x, i) => x.startTime ? `${DAYS[i].slice(0, 3)} ${fmtShort(Week.addDays(weekKey, i))}: ${x.startTime}-${x.finishTime}` +
+      `${x.startPlace || x.finishPlace ? ` ${x.startPlace || '?'} to ${x.finishPlace || '?'}` : ''}${x.drops ? ` (${x.drops})` : ''}` : '').filter(Boolean).join('\n');
+    const id = card && card.identification;
+    const vals = {
+      name: footVal('name') || '', firstName: id ? id.firstNames.split(' ')[0] : (footVal('name') || '').split(' ').pop(),
+      weekCommencing: fmtShort(weekKey), weekEnding: fmtShort(Week.addDays(weekKey, 6)), vehicle: footVal('vehicle') || '',
+      days: days.filter((x) => x.startTime || x.finishTime).length, nights: d.p2.totals.uk + d.p2.totals.eu,
+      expenses: (Number(d.p2.totals.total) || 0).toFixed(2), daysList: list, file: fileName(),
+    };
+    return (profile.emailTpl || DEFAULT_EMAIL).replace(/\{(\w+)\}/g, (m, k) => (k in vals ? vals[k] : m));
+  }
+  function updateEmail() { const o = $('#emailOut'); if (o) o.value = emailText(); }
+  function setupEmail() {
+    const t = $('#emailTpl');
+    t.value = profile.emailTpl || DEFAULT_EMAIL;
+    t.oninput = () => { profile.emailTpl = t.value; LS.set('profile', profile); updateEmail(); };
+    $('#emailReset').onclick = () => { delete profile.emailTpl; LS.set('profile', profile); t.value = DEFAULT_EMAIL; updateEmail(); };
+    $('#emailCopy').onclick = async () => {
+      const txt = emailText();
+      try { await navigator.clipboard.writeText(txt); } catch { const o = $('#emailOut'); o.select(); document.execCommand('copy'); }
+      $('#emailCopy').textContent = 'Copied ✓';
+      setTimeout(() => { $('#emailCopy').textContent = 'Copy email'; }, 1500);
     };
   }
 
@@ -543,6 +681,7 @@
   function schedulePdf() { clearTimeout(pdfT); pdfT = setTimeout(renderPdf, 500); }
   async function renderPdf() {
     if (!ws) return;
+    updateEmail();
     if (building) { again = true; return; }
     building = true;
     try {
@@ -596,7 +735,7 @@
     $('#share').onclick = async () => {
       const bytes = await TimesheetPDF.build(buildData(), { page2: footVal('page2') !== 'no' });
       const file = new File([bytes], fileName(), { type: 'application/pdf' });
-      try { await navigator.share({ files: [file], title: fileName() }); } catch (e) { if (e.name !== 'AbortError') alert('Sharing failed: ' + e.message); }
+      try { await navigator.share({ files: [file], title: fileName(), text: emailText() }); } catch (e) { if (e.name !== 'AbortError') alert('Sharing failed: ' + e.message); }
     };
     $('#openPreview').onclick = () => { if (pdfUrl) window.open(pdfUrl, '_blank'); };
     // Phones can't show a PDF inside the page: offer "Open preview" and "Share" instead.
@@ -606,7 +745,7 @@
     try { if (navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })) $('#share').classList.remove('hidden'); } catch { /* no file sharing */ }
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch((e) => console.warn('offline mode unavailable', e));
     $('#downloadBlank').onclick = async () => download(new Blob([await TimesheetPDF.build({})], { type: 'application/pdf' }), 'TC_timesheet_blank.pdf');
-    setupSignature(); setupSettings(); setupFill(); renderPlaces();
+    setupSignature(); setupSettings(); setupFill(); setupCal(); setupEmail(); renderPlaces();
     window.TachoTimesheetDebug = { buildData, get card() { return card; } };
     idb.get('card').then((c) => c ? loadCard(c.bytes, c.name, false) : buildWeekList()).catch(() => buildWeekList());
   }

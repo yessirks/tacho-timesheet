@@ -32,6 +32,17 @@ and use "Share" to send the finished PDF to the office (WhatsApp, email…).
 Your details, signature and photos are stored on each device separately.
 "Back up settings" / "Restore settings" copies them between PC and phone.
 
+Drops diary
+-----------
+A calendar of your drops. Tap a day, type the drops (or tap a name you've used before).
+The timesheet uses the diary first, and the tacho's Load/Unload GPS drops if the diary is empty.
+Green dot = the tacho has activity that day.
+
+Email to the office
+-------------------
+Ready-made email text for the week: "Copy email", or "Share" sends it with the PDF on a phone.
+"Change the wording" lets you write your own, with fill-ins like {weekCommencing} or {vehicle}.
+
 Choosing what gets filled in
 ----------------------------
 Under the week picker, untick anything you don't want filled from the tacho

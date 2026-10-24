@@ -93,6 +93,17 @@
   .places td { padding: 3px 4px; }
   footer { color: var(--muted); font-size: 12px; padding: 0 20px 20px; }
   .hidden { display: none !important; }
+  .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
+  .cal-h { text-align: center; font-size: 11.5px; color: var(--muted); }
+  .cal-d { appearance: none; font: inherit; color: var(--ink); text-align: left; min-height: 58px; padding: 4px 5px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); cursor: pointer; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+  .cal-d .n { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+  .cal-d .t { font-size: 10.5px; line-height: 1.25; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; }
+  .cal-d.other { opacity: .45; }
+  .cal-d.wk { background: var(--soft); }
+  .cal-d.today .n { color: var(--accent); }
+  .cal-d.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .cal-d .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); display: inline-block; }
+  @media (max-width: 600px) { .cal-d { min-height: 46px; padding: 3px; } .cal-d .t { -webkit-line-clamp: 2; font-size: 9.5px; } }
   .checks { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
   label.check { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
   label.check input { width: auto; margin: 0; }
@@ -127,6 +138,17 @@
     <section>
       <h2>Days <span class="sub">Filled from the tacho. Edited fields turn orange; ↺ puts the tacho values back.</span></h2>
       <div id="days"></div>
+    </section>
+
+    <section id="diary">
+      <h2>Drops diary <span class="sub">Write down each day's drops as you go. They fill the timesheet when the tacho has no GPS for them.</span></h2>
+      <div class="row" style="justify-content:space-between">
+        <div class="row"><button class="btn small" id="calPrev">◀</button><b id="calTitle" style="min-width:120px;text-align:center"></b><button class="btn small" id="calNext">▶</button></div>
+        <div class="row"><button class="btn small" id="calToday">Today</button><button class="btn small" id="calOpenWeek">Open this week</button></div>
+      </div>
+      <div id="cal" class="cal"></div>
+      <label class="f" style="margin-top:10px"><span id="calDate"></span><textarea id="calText" rows="3" placeholder="e.g. Kepak Merthyr, ASDA Patchway, Filton"></textarea></label>
+      <div id="calChips" class="chips"></div>
     </section>
 
     <section>
@@ -164,6 +186,18 @@
         <label class="f">Include page 2<select data-k="page2"><option value="yes">Yes</option><option value="no">No</option></select></label>
       </div>
       <p class="muted small">Name, address, NI number and declaration are remembered for next time (in this browser only).</p>
+    </section>
+
+    <section>
+      <h2>Email to the office <span class="sub">Copy and paste it into your email, or use Share to send it with the PDF.</span></h2>
+      <textarea id="emailOut" rows="8" readonly></textarea>
+      <div class="actions" style="margin-top:8px"><button class="btn small primary" id="emailCopy">Copy email</button></div>
+      <details style="margin-top:10px">
+        <summary class="small">Change the wording</summary>
+        <textarea id="emailTpl" rows="8" style="margin-top:6px"></textarea>
+        <p class="small muted">Fill-ins: {name} {firstName} {weekCommencing} {weekEnding} {vehicle} {days} {nights} {expenses} {daysList} {file}</p>
+        <button class="btn small" id="emailReset">Back to default wording</button>
+      </details>
     </section>
 
     <section>
