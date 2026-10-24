@@ -1,7 +1,9 @@
 TACHO TIMESHEET
 ===============
 
-Double-click index.html (opens in Chrome / Edge). Nothing is uploaded: the .ddd file,
+Online (PC or phone): https://yessirks.github.io/tacho-timesheet/
+
+Or double-click index.html (opens in Chrome / Edge). Nothing is uploaded: the .ddd file,
 your details and photos stay in this browser on this computer.
 
 Weekly use
@@ -23,7 +25,7 @@ First time only
 
 On your phone
 -------------
-Open the GitHub Pages link in Chrome (Android) or Safari (iPhone), then
+Open https://yessirks.github.io/tacho-timesheet/ in Chrome (Android) or Safari (iPhone), then
 "Add to Home screen" / "Install app". It then works offline like an app.
 Get the .ddd onto the phone (from your card reader app, email, Drive…), tap "Load .ddd file",
 and use "Share" to send the finished PDF to the office (WhatsApp, email…).
