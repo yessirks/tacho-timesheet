@@ -71,8 +71,9 @@
   .day-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
   .day-head b { min-width: 120px; }
   .day-grid { display: grid; grid-template-columns: 90px 90px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
-  .day-grid2 { display: grid; grid-template-columns: minmax(0, 1fr) 110px 90px; gap: 8px; margin-top: 8px; }
-  @media (max-width: 700px) { .day-grid { grid-template-columns: 1fr 1fr; } .day-grid2 { grid-template-columns: 1fr 1fr; } .day-grid2 label:first-child { grid-column: 1 / -1; } }
+  .day-grid2 { display: grid; grid-template-columns: 110px 100px minmax(0, 1fr); gap: 8px; margin-top: 10px; }
+  .lbl { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  @media (max-width: 700px) { .day-grid { grid-template-columns: 1fr 1fr; } .day-grid2 { grid-template-columns: 1fr 1fr; } .day-grid2 label:last-child { grid-column: 1 / -1; } }
   .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
   .chip { font-size: 11.5px; border: 1px solid var(--line); border-radius: 20px; padding: 1px 8px; background: var(--soft); color: var(--ink); cursor: pointer; }
   .chip.gps { border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
@@ -93,6 +94,30 @@
   .places td { padding: 3px 4px; }
   footer { color: var(--muted); font-size: 12px; padding: 0 20px 20px; }
   .hidden { display: none !important; }
+  h3.sub-h { font-size: 13.5px; margin: 16px 0 6px; }
+  .stops { display: flex; flex-direction: column; gap: 6px; }
+  .stop { display: grid; grid-template-columns: 110px minmax(0, 1fr) 30px; gap: 6px; align-items: center; }
+  .exp-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 90px auto 30px; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .exp-photo { display: flex; align-items: center; gap: 4px; }
+  .add-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  @media (max-width: 600px) {
+    .stop { grid-template-columns: 96px minmax(0, 1fr) 28px; }
+    .exp-row { grid-template-columns: 1fr 90px 28px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+    .exp-row [data-e=note] { grid-column: 1 / -1; grid-row: 2; }
+    .exp-row .exp-photo { grid-column: 1 / -1; grid-row: 3; }
+  }
+  .cal-d .cash { margin-left: auto; font-size: 10px; font-weight: 600; color: var(--warn); }
+  .done-state { font-size: 12.5px; padding: 3px 9px; border-radius: 20px; background: var(--soft); color: var(--muted); }
+  .done-state.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+  .done-state.warn { background: var(--warn-bg); color: var(--warn); }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 30px); background: var(--ink); color: var(--panel); padding: 10px 16px; border-radius: 10px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 20; max-width: calc(100vw - 32px); }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  @media (max-width: 1100px) {
+    /* phone/tablet: keep Download and Share at the bottom of the screen */
+    #tab-sheet .preview .actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 14px rgba(0,0,0,.08); }
+    #tab-sheet { padding-bottom: 96px; }
+    #toast { bottom: 90px; }
+  }
   nav.tabs { display: flex; gap: 4px; flex-basis: 100%; margin: 2px 0 -12px; }
   nav.tabs button { appearance: none; border: 0; background: none; font: inherit; color: var(--muted); padding: 8px 14px 10px; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 600; }
   nav.tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
@@ -196,6 +221,7 @@
       <button class="btn hidden" id="share">Share</button>
       <button class="btn hidden" id="openPreview">Open preview</button>
       <button class="btn" id="downloadBlank">Blank form</button>
+      <span class="done-state" id="doneState"></span>
       <span class="muted small" id="status"></span>
     </div>
     <iframe id="pdfFrame" title="PDF preview"></iframe>
@@ -222,9 +248,12 @@
         <label class="f">Start place<input id="calStart" list="placeNames" placeholder="e.g. Scorrier"></label>
         <label class="f">Finish place<input id="calFinish" list="placeNames" placeholder="e.g. Kepak Merthyr"></label>
       </div>
-      <label class="f" style="margin-top:10px">Drops<textarea id="calText" rows="3" placeholder="e.g. Kepak Merthyr, ASDA Patchway, Filton"></textarea></label>
-      <div class="small muted" style="margin-top:6px">Tap to add a drop you've used before:</div>
+      <h3 class="sub-h">Drops, pickups, coupling</h3>
+      <div id="calStops"></div>
+      <div class="small muted" style="margin-top:8px">Tap to add one you've used before:</div>
       <div id="calChips" class="chips"></div>
+      <h3 class="sub-h">Expenses this day <span class="muted small">(parking, tolls, food… add a photo of the receipt)</span></h3>
+      <div id="calExp"></div>
       <div class="actions" style="margin-top:12px">
         <button class="btn small" id="calCopyTacho">Copy tacho places into diary</button>
         <button class="btn small" id="calClear">Clear this day</button>
@@ -271,6 +300,7 @@
         <label class="f">Look up place names online (OpenStreetMap)<select id="setGeo"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Remember place names I type<select id="setLearn"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Night out if day ends more than (km) from base<input id="setAway" type="number" min="1"></label>
+        <label class="f">Write "Drop" before drop names on the timesheet<select id="setDropWord"><option value="no">No (just the name)</option><option value="yes">Yes</option></select></label>
       </div>
       <h2 style="margin-top:16px">Email wording</h2>
       <textarea id="emailTpl" rows="8"></textarea>
@@ -297,6 +327,7 @@
 </main>
 
 <datalist id="placeNames"></datalist>
+<div id="toast" role="status" aria-live="polite"></div>
 <footer>Everything stays on this device. Place names © OpenStreetMap contributors (Nominatim). Times are UK local time.</footer>
 
 <script src="lib/pdf-lib.min.js"></script>

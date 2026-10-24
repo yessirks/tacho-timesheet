@@ -10,7 +10,9 @@ Three tabs
 ----------
 Timesheet   pick the week, check the days, add expenses/receipts, download or share the PDF,
             copy the email to the office.
-Diary       a calendar. Write each day's start place, finish place and drops as you go.
+Diary       a calendar. Write each day's start place, finish place, and a list of
+            Drop / Pickup / Couple / Uncouple + name (e.g. Drop · Torquay Sainsbury's),
+            plus that day's expenses (parking, tolls, food, other) with receipt photos.
             When you load the .ddd, your diary goes straight into the timesheet and the
             tacho fills in the rest (times, driving hours, nights out, missing places).
             Bold = written by you, grey = from the tacho, green dot = tacho activity.
@@ -19,10 +21,14 @@ My details  name, address, NI number, declaration, signature, presets (what to f
 
 Weekly use
 ----------
-1. During the week: Diary tab, tap the day, write places and drops (tap names you've used before).
+1. During the week: Diary tab, tap the day, add places, drops/pickups and expenses
+   (snap the receipt with "📷 Receipt"; tap names you've used before).
 2. Download your driver card (.ddd) and load it ("Load .ddd file", or drop it on the page).
 3. Timesheet tab: pick the week, check it, add expenses ("Add photo" attaches the receipt).
 4. Download PDF (or Share on a phone): timesheet, subsistence claim, then the receipts.
+   The badge next to the button shows "✓ Downloaded <date>" (orange if you changed the week
+   after downloading), and sent weeks get a ✓ in the week list.
+   Food goes in the form's "Market expenses" column (the form has no food column).
 5. Copy email, paste it into your email to the office, attach the PDF.
 
 First time only
