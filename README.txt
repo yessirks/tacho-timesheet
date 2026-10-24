@@ -4,59 +4,56 @@ TACHO TIMESHEET
 Online (PC or phone): https://yessirks.github.io/tacho-timesheet/
 
 Or double-click index.html (opens in Chrome / Edge). Nothing is uploaded: the .ddd file,
-your details and photos stay in this browser on this computer.
+your details and photos stay in this browser on this device.
+
+Three tabs
+----------
+Timesheet   pick the week, check the days, add expenses/receipts, download or share the PDF,
+            copy the email to the office.
+Diary       a calendar. Write each day's start place, finish place and drops as you go.
+            When you load the .ddd, your diary goes straight into the timesheet and the
+            tacho fills in the rest (times, driving hours, nights out, missing places).
+            Bold = written by you, grey = from the tacho, green dot = tacho activity.
+My details  name, address, NI number, declaration, signature, presets (what to fill from
+            the tacho, email wording), saved places, and your data (download/restore).
 
 Weekly use
 ----------
-1. Download your driver card (.ddd) and drop it on the page (or "Load .ddd file").
-2. Pick the week (Sunday to Saturday). Times, places, nights out, driving hours,
-   vehicle reg and totals are filled from the tacho.
-3. Type the drops (and any place names that are missing).
-4. Add expenses (parking, tolls). "Add photo" attaches the receipt. "Attach other photo"
-   is for things like a bank statement screenshot.
-5. Download PDF. You get TC_timesheet_D_M_YY.pdf: timesheet, subsistence claim, then the receipts.
+1. During the week: Diary tab, tap the day, write places and drops (tap names you've used before).
+2. Download your driver card (.ddd) and load it ("Load .ddd file", or drop it on the page).
+3. Timesheet tab: pick the week, check it, add expenses ("Add photo" attaches the receipt).
+4. Download PDF (or Share on a phone): timesheet, subsistence claim, then the receipts.
+5. Copy email, paste it into your email to the office, attach the PDF.
 
 First time only
 ---------------
-- Signature: open "Signature", sign with the mouse/finger (or upload a photo), "Use this signature".
-- Page 2: enter address + NI number once; it's remembered.
-- Check "Saved places & settings": the Base (home/depot) is detected from where you take
-  weekly rests. Nights out = the day ended more than 25 km from Base.
+My details tab: fill in name, address, NI number, sign, and check the Base place
+(home/depot; nights out = the day ended more than 25 km from Base).
+
+Your data
+---------
+Everything is saved automatically in this browser's storage on this device (like cookies,
+but bigger), and stays there until you clear the browser's site data.
+My details > "Download my data (.json)" saves a copy of everything: details, signature,
+presets, places, diary, your edits and expenses (receipt photos aren't included; they're
+in the PDFs). "Restore from a .json file" loads it back, e.g. on your phone or a new PC.
+Restoring merges: it never deletes what's already on the device.
+On iPhone, add the app to the Home Screen, otherwise Safari may clear it after a few weeks unused.
 
 On your phone
 -------------
-Open https://yessirks.github.io/tacho-timesheet/ in Chrome (Android) or Safari (iPhone), then
-"Add to Home screen" / "Install app". It then works offline like an app.
-Get the .ddd onto the phone (from your card reader app, email, Drive…), tap "Load .ddd file",
-and use "Share" to send the finished PDF to the office (WhatsApp, email…).
-Your details, signature and photos are stored on each device separately.
-"Back up settings" / "Restore settings" copies them between PC and phone.
-
-Drops diary
------------
-A calendar of your drops. Tap a day, type the drops (or tap a name you've used before).
-The timesheet uses the diary first, and the tacho's Load/Unload GPS drops if the diary is empty.
-Green dot = the tacho has activity that day.
-
-Email to the office
--------------------
-Ready-made email text for the week: "Copy email", or "Share" sends it with the PDF on a phone.
-"Change the wording" lets you write your own, with fill-ins like {weekCommencing} or {vehicle}.
-
-Choosing what gets filled in
-----------------------------
-Under the week picker, untick anything you don't want filled from the tacho
-(e.g. driving hours). You can still type those fields by hand.
+Open the link in Chrome (Android) or Safari (iPhone), then "Install app" / "Add to Home Screen".
+It then works offline like an app. Get the .ddd onto the phone (card reader app, email, Drive…),
+tap "Load .ddd file", and use "Share" to send the PDF and the email text to the office.
 
 Where the data comes from
 -------------------------
 - Start time = card inserted, finish time = last activity (same as reading the tacho).
-- Start/finish place = GPS position the tacho stores when you start/end the day
-  (only filled when it's exact). Names come from OpenStreetMap; type your own name
-  for a place (e.g. "Trewithen Dairy") and it's reused automatically next time.
-- Drops: the card only has a GPS position for a drop if you press Load/Unload on the
-  tachograph. Do that at each drop and the drops fill themselves in. Otherwise the app
-  lists "stops with work" (times) to help you remember them.
+- Start/finish place = your diary, otherwise the GPS position the tacho stores when you
+  start/end the day (only when it's exact). Names come from your saved places, a few built-in
+  sites, then OpenStreetMap. Type your own name once (e.g. "Kepak Merthyr") and it's reused.
+- Drops = your diary, otherwise the tacho's Load/Unload GPS entries (only if you press
+  Load/Unload on the tachograph). "Stops with work" times are shown to jog your memory.
 
 Files
 -----

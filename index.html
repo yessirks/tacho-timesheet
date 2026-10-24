@@ -84,7 +84,7 @@
   table.exp td { padding: 3px 4px; vertical-align: middle; }
   table.exp td.num input { text-align: right; }
   .thumb { width: 38px; height: 38px; object-fit: cover; border-radius: 5px; border: 1px solid var(--line); vertical-align: middle; }
-  .preview { position: sticky; top: 70px; height: calc(100vh - 90px); display: flex; flex-direction: column; gap: 10px; }
+  .preview { position: sticky; top: 120px; height: calc(100vh - 140px); display: flex; flex-direction: column; gap: 10px; }
   .preview iframe { flex: 1; width: 100%; border: 1px solid var(--line); border-radius: 10px; background: #888; }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   #sig { width: 100%; max-width: 460px; height: 150px; border: 1px solid var(--line); border-radius: 8px; background: #fff; touch-action: none; display: block; }
@@ -93,6 +93,17 @@
   .places td { padding: 3px 4px; }
   footer { color: var(--muted); font-size: 12px; padding: 0 20px 20px; }
   .hidden { display: none !important; }
+  nav.tabs { display: flex; gap: 4px; flex-basis: 100%; margin: 2px 0 -12px; }
+  nav.tabs button { appearance: none; border: 0; background: none; font: inherit; color: var(--muted); padding: 8px 14px 10px; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 600; }
+  nav.tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab { display: none !important; }
+  .tab.on { display: grid !important; }
+  main.single { grid-template-columns: minmax(0, 860px); justify-content: center; }
+  .note-tacho { background: var(--soft); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+  .note-tacho:empty { display: none; }
+  .cal-d .t b { color: var(--ink); font-weight: 600; }
+  i.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); display: inline-block; vertical-align: middle; }
+  @media (max-width: 600px) { nav.tabs { margin-bottom: -10px; } nav.tabs button { padding: 6px 10px 8px; flex: 1; } }
   .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
   .cal-h { text-align: center; font-size: 11.5px; color: var(--muted); }
   .cal-d { appearance: none; font: inherit; color: var(--ink); text-align: left; min-height: 58px; padding: 4px 5px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); cursor: pointer; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
@@ -114,9 +125,15 @@
   <h1>Tacho Timesheet</h1>
   <div class="card-info" id="cardInfo">No card file loaded</div>
   <label class="btn">Load .ddd file<input type="file" id="fileInput" hidden></label>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="sheet">Timesheet</button>
+    <button type="button" role="tab" data-tab="diary">Diary</button>
+    <button type="button" role="tab" data-tab="me">My details</button>
+  </nav>
 </header>
 
-<main>
+<!-- ============ TIMESHEET ============ -->
+<main class="tab" id="tab-sheet">
   <div>
     <section id="dropZone" class="drop">
       <b>Drop your driver card download here</b><br>
@@ -131,24 +148,11 @@
         <button class="btn" id="nextWeek" title="Next week">▶</button>
         <span class="muted small" id="weekInfo"></span>
       </div>
-      <div class="small muted" style="margin-top:10px">Fill in from the tacho:</div>
-      <div id="fillOpts" class="checks"></div>
     </section>
 
     <section>
-      <h2>Days <span class="sub">Filled from the tacho. Edited fields turn orange; ↺ puts the tacho values back.</span></h2>
+      <h2>Days <span class="sub">Your diary first, then the tacho. Edited fields turn orange; ↺ puts the tacho times back.</span></h2>
       <div id="days"></div>
-    </section>
-
-    <section id="diary">
-      <h2>Drops diary <span class="sub">Write down each day's drops as you go. They fill the timesheet when the tacho has no GPS for them.</span></h2>
-      <div class="row" style="justify-content:space-between">
-        <div class="row"><button class="btn small" id="calPrev">◀</button><b id="calTitle" style="min-width:120px;text-align:center"></b><button class="btn small" id="calNext">▶</button></div>
-        <div class="row"><button class="btn small" id="calToday">Today</button><button class="btn small" id="calOpenWeek">Open this week</button></div>
-      </div>
-      <div id="cal" class="cal"></div>
-      <label class="f" style="margin-top:10px"><span id="calDate"></span><textarea id="calText" rows="3" placeholder="e.g. Kepak Merthyr, ASDA Patchway, Filton"></textarea></label>
-      <div id="calChips" class="chips"></div>
     </section>
 
     <section>
@@ -165,72 +169,24 @@
     </section>
 
     <section>
-      <h2>Bottom of the timesheet</h2>
+      <h2>This week's totals</h2>
       <div class="grid2">
         <label class="f">Total weekdays<input data-k="totalWeekdays"></label>
         <label class="f">Total weekend days<input data-k="totalWeekendDays"></label>
         <label class="f">24hr away from home<select data-k="away24"><option value="">(none)</option><option>YES</option><option>NO</option></select></label>
-        <label class="f">Declaration (no accidents etc.)<select data-k="declaration"><option value="">(none)</option><option>YES</option><option>NO</option></select></label>
-        <label class="f">Name (page 1)<input data-k="name"></label>
         <label class="f">Week commencing<input data-k="weekCommencing"></label>
-      </div>
-      <h2 style="margin-top:14px">Subsistence claim (page 2)</h2>
-      <div class="grid2">
-        <label class="f">Employee's name (block letters)<input data-k="nameLine"></label>
-        <label class="f">Address line 1<input data-k="addr1"></label>
-        <label class="f">Address line 2<input data-k="addr2"></label>
-        <label class="f">National Insurance number<input data-k="ni"></label>
         <label class="f">Vehicle no<input data-k="vehicle"></label>
         <label class="f">Date signed<input data-k="signedDate"></label>
         <label class="f">W/E date<input data-k="weDate"></label>
-        <label class="f">Include page 2<select data-k="page2"><option value="yes">Yes</option><option value="no">No</option></select></label>
       </div>
-      <p class="muted small">Name, address, NI number and declaration are remembered for next time (in this browser only).</p>
+      <p class="muted small">Name, address, NI number, declaration and signature are in <a href="#me" class="tablink">My details</a>.</p>
     </section>
 
     <section>
-      <h2>Email to the office <span class="sub">Copy and paste it into your email, or use Share to send it with the PDF.</span></h2>
+      <h2>Email to the office <span class="sub">Copy it into your email, or use Share to send it with the PDF.</span></h2>
       <textarea id="emailOut" rows="8" readonly></textarea>
-      <div class="actions" style="margin-top:8px"><button class="btn small primary" id="emailCopy">Copy email</button></div>
-      <details style="margin-top:10px">
-        <summary class="small">Change the wording</summary>
-        <textarea id="emailTpl" rows="8" style="margin-top:6px"></textarea>
-        <p class="small muted">Fill-ins: {name} {firstName} {weekCommencing} {weekEnding} {vehicle} {days} {nights} {expenses} {daysList} {file}</p>
-        <button class="btn small" id="emailReset">Back to default wording</button>
-      </details>
-    </section>
-
-    <section>
-      <details id="sigDetails">
-        <summary>Signature <span class="muted small" id="sigState"></span></summary>
-        <p class="small muted">Sign with your mouse or finger, or upload a photo of your signature on white paper.</p>
-        <canvas id="sig" width="920" height="300"></canvas>
-        <div class="actions" style="margin-top:8px">
-          <button class="btn small" id="sigClear">Clear</button>
-          <button class="btn small primary" id="sigSave">Use this signature</button>
-          <label class="btn small">Upload image<input type="file" id="sigUpload" accept="image/*" hidden></label>
-          <img id="sigImg" class="hidden" alt="Saved signature">
-          <button class="btn small link hidden" id="sigRemove">Remove</button>
-        </div>
-      </details>
-    </section>
-
-    <section>
-      <details id="placesDetails">
-        <summary>Saved places &amp; settings</summary>
-        <p class="small muted">When you type your own name for a place (e.g. <i>Trewithen Dairy</i>), it's saved here and used automatically next time the truck is within the radius. The <b>Base</b> place decides nights out.</p>
-        <table class="places small" style="width:100%"><thead><tr><th>Base</th><th>Name</th><th>Radius m</th><th></th><th></th></tr></thead><tbody id="placesBody"></tbody></table>
-        <div class="grid2" style="margin-top:10px">
-          <label class="f">Look up place names online (OpenStreetMap)<select id="setGeo"><option value="yes">Yes</option><option value="no">No</option></select></label>
-          <label class="f">Remember place names I type<select id="setLearn"><option value="yes">Yes</option><option value="no">No</option></select></label>
-          <label class="f">Night out if day ends more than (km) from base<input id="setAway" type="number" min="1"></label>
-        </div>
-        <div class="actions" style="margin-top:10px">
-          <button class="btn small" id="exportSettings">Back up settings</button>
-          <label class="btn small">Restore settings<input type="file" id="importSettings" accept=".json" hidden></label>
-          <button class="btn small" id="resetWeek">Clear my edits for this week</button>
-        </div>
-      </details>
+      <div class="actions" style="margin-top:8px"><button class="btn small primary" id="emailCopy">Copy email</button>
+        <a href="#me" class="tablink small">Change the wording</a></div>
     </section>
   </div>
 
@@ -245,7 +201,103 @@
     <iframe id="pdfFrame" title="PDF preview"></iframe>
   </div>
 </main>
-<footer>Everything stays on this computer. Place names © OpenStreetMap contributors (Nominatim). Times are UK local time.</footer>
+
+<!-- ============ DIARY ============ -->
+<main class="tab single" id="tab-diary">
+  <div>
+    <section id="diary">
+      <h2>Diary <span class="sub">Write down each day's places and drops as you go. When you load the .ddd they go straight into the timesheet.</span></h2>
+      <div class="row" style="justify-content:space-between">
+        <div class="row"><button class="btn small" id="calPrev">◀</button><b id="calTitle" style="min-width:120px;text-align:center"></b><button class="btn small" id="calNext">▶</button></div>
+        <div class="row"><button class="btn small" id="calToday">Today</button></div>
+      </div>
+      <div id="cal" class="cal"></div>
+      <p class="small muted" style="margin:6px 0 0"><i class="dot"></i> tacho activity · <b>bold</b> = written in your diary · grey = from the tacho</p>
+    </section>
+
+    <section>
+      <h2 id="calDate"></h2>
+      <div id="calTacho" class="note-tacho small"></div>
+      <div class="grid2">
+        <label class="f">Start place<input id="calStart" list="placeNames" placeholder="e.g. Scorrier"></label>
+        <label class="f">Finish place<input id="calFinish" list="placeNames" placeholder="e.g. Kepak Merthyr"></label>
+      </div>
+      <label class="f" style="margin-top:10px">Drops<textarea id="calText" rows="3" placeholder="e.g. Kepak Merthyr, ASDA Patchway, Filton"></textarea></label>
+      <div class="small muted" style="margin-top:6px">Tap to add a drop you've used before:</div>
+      <div id="calChips" class="chips"></div>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn small" id="calCopyTacho">Copy tacho places into diary</button>
+        <button class="btn small" id="calClear">Clear this day</button>
+        <button class="btn small primary" id="calOpenWeek">Open this week's timesheet</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<!-- ============ MY DETAILS ============ -->
+<main class="tab single" id="tab-me">
+  <div>
+    <section>
+      <h2>My details <span class="sub">Saved automatically on this device.</span></h2>
+      <div class="grid2">
+        <label class="f">Name (page 1)<input data-k="name"></label>
+        <label class="f">Employee's name, block letters (page 2)<input data-k="nameLine"></label>
+        <label class="f">Address line 1<input data-k="addr1"></label>
+        <label class="f">Address line 2<input data-k="addr2"></label>
+        <label class="f">National Insurance number<input data-k="ni"></label>
+        <label class="f">Declaration (no accidents etc.)<select data-k="declaration"><option value="">(leave blank)</option><option>YES</option><option>NO</option></select></label>
+        <label class="f">Include page 2 (subsistence claim)<select data-k="page2"><option value="yes">Yes</option><option value="no">No</option></select></label>
+      </div>
+    </section>
+
+    <section>
+      <h2>Signature <span class="muted small" id="sigState"></span></h2>
+      <p class="small muted">Sign with your mouse or finger, or upload a photo of your signature on white paper.</p>
+      <canvas id="sig" width="920" height="300"></canvas>
+      <div class="actions" style="margin-top:8px">
+        <button class="btn small" id="sigClear">Clear</button>
+        <button class="btn small primary" id="sigSave">Use this signature</button>
+        <label class="btn small">Upload image<input type="file" id="sigUpload" accept="image/*" hidden></label>
+        <img id="sigImg" class="hidden" alt="Saved signature">
+        <button class="btn small link hidden" id="sigRemove">Remove</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Presets</h2>
+      <div class="small muted">Fill in from the tacho:</div>
+      <div id="fillOpts" class="checks"></div>
+      <div class="grid2" style="margin-top:12px">
+        <label class="f">Look up place names online (OpenStreetMap)<select id="setGeo"><option value="yes">Yes</option><option value="no">No</option></select></label>
+        <label class="f">Remember place names I type<select id="setLearn"><option value="yes">Yes</option><option value="no">No</option></select></label>
+        <label class="f">Night out if day ends more than (km) from base<input id="setAway" type="number" min="1"></label>
+      </div>
+      <h2 style="margin-top:16px">Email wording</h2>
+      <textarea id="emailTpl" rows="8"></textarea>
+      <p class="small muted">Fill-ins: {name} {firstName} {weekCommencing} {weekEnding} {vehicle} {days} {nights} {expenses} {daysList} {file}</p>
+      <button class="btn small" id="emailReset">Back to default wording</button>
+    </section>
+
+    <section>
+      <h2>Saved places <span class="sub">Names used whenever the truck is within the radius. <b>Base</b> decides nights out.</span></h2>
+      <table class="places small" style="width:100%"><thead><tr><th>Base</th><th>Name</th><th>Radius m</th><th></th><th></th></tr></thead><tbody id="placesBody"></tbody></table>
+    </section>
+
+    <section>
+      <h2>My data</h2>
+      <p class="small" id="storageState">Checking storage…</p>
+      <p class="small muted">Everything (details, signature, presets, places, diary, your edits and expenses) is kept in this browser's storage on this device, like cookies but bigger. Download a copy now and then, and use it to move everything to your phone or a new computer. On iPhone, add the app to your Home Screen, otherwise Safari may clear it after a few weeks unused.</p>
+      <div class="actions">
+        <button class="btn small primary" id="exportSettings">Download my data (.json)</button>
+        <label class="btn small">Restore from a .json file<input type="file" id="importSettings" accept=".json,application/json" hidden></label>
+        <button class="btn small" id="resetWeek">Clear my edits for the selected week</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<datalist id="placeNames"></datalist>
+<footer>Everything stays on this device. Place names © OpenStreetMap contributors (Nominatim). Times are UK local time.</footer>
 
 <script src="lib/pdf-lib.min.js"></script>
 <script src="logo.js"></script>

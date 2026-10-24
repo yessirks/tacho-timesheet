@@ -36,13 +36,20 @@
     return {
       get: (k) => tx('readonly', (s) => s.get(k)).catch(() => memKV.get(k)),
       set: (k, v) => { memKV.set(k, v); return tx('readwrite', (s) => s.put(v, k)).catch((e) => console.warn('not saved', k, e)); },
+      entries: async () => {
+        try {
+          const ks = await tx('readonly', (s) => s.getAllKeys()), vs = await tx('readonly', (s) => s.getAll());
+          return ks.map((k, i) => [k, vs[i]]);
+        } catch { return [...memKV.entries()]; }
+      },
     };
   })();
 
   let profile = LS.get('profile', {});
   let places = LS.get('places', []);
   const geo = LS.get('geo', {});
-  const diary = LS.get('diary', {});   // "YYYY-MM-DD" -> drops text; shared by the diary calendar and the timesheet
+  const diary = LS.get('diary', {});   // "YYYY-MM-DD" -> { start, finish, drops }; shared by the Diary tab and the timesheet
+  for (const [d, v] of Object.entries(diary)) if (typeof v === 'string') diary[d] = { drops: v };   // older versions kept drops only
   // Sites that OpenStreetMap doesn't name well. Your own saved places win over these.
   const KNOWN_PLACES = [
     { name: 'Trewithen Dairy', lat: 50.4434, lon: -4.6394, radius: 700 },
@@ -111,6 +118,7 @@
       }
       geoQueue.shift();
       refreshAuto();
+      if (calMonth && $('#tab-diary').classList.contains('on')) { renderCalGrid(); fillCalEditor(); }
     }
     geoBusy = false;
     setStatus('');
@@ -140,15 +148,15 @@
     });
   }
   function autoDay(i) {
-    const r = week && week.rows[i], noted = diary[Week.addDays(weekKey, i)] || '';
-    if (!r || !r.startTime) return { startTime: '', finishTime: '', startPlace: '', finishPlace: '', drops: noted, nightOut: '', driving: '', stayed: '' };
+    const r = week && week.rows[i], n = dget(Week.addDays(weekKey, i));
+    if (!r || !r.startTime) return { startTime: '', finishTime: '', startPlace: n.start || '', finishPlace: n.finish || '', drops: n.drops || '', nightOut: '', driving: '', stayed: '' };
     // Only exact positions are filled in; rough ones are shown as a hint in the empty field.
     const at = (fix) => (on('places') && fix && fix.exact ? label(fix.pos) : '');
     return {
       startTime: on('times') ? r.startTime : '', finishTime: on('times') ? r.finishTime : '',
-      startPlace: at(r.startFix), finishPlace: at(r.endFix),
-      // What you wrote in the diary wins; otherwise the Load/Unload GPS entries from the tacho.
-      drops: noted || (on('drops') ? r.drops.map((d) => (d.op === 1 ? 'Load ' : '') + (label(d.pos) || '…')).join(', ') : ''),
+      // What you wrote in the diary wins; otherwise the tacho's GPS places and Load/Unload drops.
+      startPlace: n.start || at(r.startFix), finishPlace: n.finish || at(r.endFix),
+      drops: n.drops || (on('drops') ? gpsDrops(r) : ''),
       nightOut: on('nightOut') ? r.nightOut : '', driving: on('driving') ? r.driving : '', stayed: '',
     };
   }
@@ -226,17 +234,20 @@
     weekKey = key;
     week = card ? Week.computeWeek(card, prep, key, { base: basePlace(), awayKm: +profile.awayKm || 25 }) : null;
     ws = (await idb.get('week:' + key)) || { days: [{}, {}, {}, {}, {}, {}, {}], foot: {}, expenses: [], other: [] };
-    ws.days.forEach((o, i) => {   // drops used to be saved per week; they live in the diary now
-      if (!('drops' in o)) return;
-      const d = Week.addDays(key, i);
-      if (o.drops.trim() && !diary[d]) setDiary(d, o.drops);
-      delete o.drops; saveWeek();
+    weekCache.clear();
+    ws.days.forEach((o, i) => {   // places and drops used to be saved per week; they live in the diary now
+      for (const [k, f] of Object.entries(DIARY_FIELD)) {
+        if (!(k in o)) continue;
+        const d = Week.addDays(key, i);
+        if (o[k].trim() && !dget(d)[f]) setDiary(d, f, o[k]);
+        delete o[k]; saveWeek();
+      }
     });
     const n = week ? week.rows.filter((r) => r.startTime).length : 0;
     $('#weekInfo').textContent = `${fmtShort(key)} – ${fmtShort(Week.addDays(key, 6))}` + (card ? ` · ${n} day${n === 1 ? '' : 's'} on the tacho` : ' · no card loaded: fill in by hand');
     renderDays(); renderFoot(); renderExpenses(); renderOther();
     if (!calSel || !inWeek(calSel)) { calSel = inWeek(todayKey()) ? todayKey() : key; calMonth = calSel.slice(0, 7); }
-    renderCal();
+    if ($('#tab-diary').classList.contains('on')) renderCal();
     schedulePdf();
   }
 
@@ -296,7 +307,7 @@
     $$('[data-d]', box).forEach((inp) => {
       const i = +inp.dataset.d, k = inp.dataset.k;
       inp.addEventListener('input', () => {
-        if (k === 'drops') setDiary(Week.addDays(weekKey, i), inp.value); else ws.days[i][k] = inp.value;
+        if (DIARY_FIELD[k]) setDiary(Week.addDays(weekKey, i), DIARY_FIELD[k], inp.value); else ws.days[i][k] = inp.value;
         inp.classList.add('edited'); inp.classList.remove('auto');
         saveWeek(); refreshFoot(); schedulePdf();
       });
@@ -304,7 +315,7 @@
         const r = week && week.rows[i], fix = r && (k === 'startPlace' ? r.startFix : r.endFix);
         if (profile.learn !== 'no' && fix && fix.exact && inp.value.trim()) {
           learnPlace(fix.pos, inp.value.trim());
-          delete ws.days[i][k]; saveWeek(); refreshAuto(true); schedulePdf();
+          weekCache.clear(); refreshAuto(true); schedulePdf();
         }
       });
     });
@@ -322,7 +333,7 @@
     if (!ws) return;
     $$('[data-d]').forEach((inp) => {
       const i = +inp.dataset.d, k = inp.dataset.k;
-      const edited = k === 'drops' ? !!diary[Week.addDays(weekKey, i)] : k in (ws.days[i] || {});
+      const edited = DIARY_FIELD[k] ? !!dget(Week.addDays(weekKey, i))[DIARY_FIELD[k]] : k in (ws.days[i] || {});
       if (!force && document.activeElement === inp) return;
       const v = dayVal(i, k);
       if (inp.value !== v) inp.value = v;
@@ -497,23 +508,10 @@
     $('#setGeo').onchange = (e) => { profile.geocode = e.target.value; LS.set('profile', profile); refreshAuto(); };
     $('#setLearn').onchange = (e) => { profile.learn = e.target.value; LS.set('profile', profile); };
     $('#setAway').onchange = (e) => { profile.awayKm = +e.target.value || 25; LS.set('profile', profile); if (weekKey) selectWeek(weekKey); };
-    $('#exportSettings').onclick = () => download(new Blob([JSON.stringify({ profile, places, geo, diary }, null, 1)], { type: 'application/json' }), 'tacho-timesheet-settings.json');
+    $('#exportSettings').onclick = exportAll;
     $('#importSettings').onchange = async (e) => {
       try {
-        const j = JSON.parse(await e.target.files[0].text());
-        // Merge, so restoring never wipes a signature or places already on this device.
-        if (j.profile) { profile = { ...profile, ...j.profile }; LS.set('profile', profile); }
-        if (j.places) {
-          for (const p of j.places) {
-            const same = places.find((q) => Week.distKm(q, p) < 0.2);
-            if (same) Object.assign(same, p); else places.push(p);
-          }
-          const b = j.places.find((p) => p.base);
-          if (b) places.forEach((q) => { q.base = Week.distKm(q, b) < 0.2; });
-          LS.set('places', places);
-        }
-        if (j.diary) { Object.assign(diary, j.diary); LS.set('diary', diary); }
-        if (j.geo) { Object.assign(geo, j.geo); LS.set('geo', geo); }
+        await importAll(e.target.files[0]);
         location.reload();
       } catch (err) { alert('That file could not be read: ' + err.message); }
     };
@@ -523,56 +521,88 @@
     };
   }
 
-  // ---- drops diary (calendar) ----------------------------------------------------------------
+  // ---- diary (calendar) ----------------------------------------------------------------------
+  // diary["YYYY-MM-DD"] = { start, finish, drops }. What you write here always wins over the tacho.
   let calMonth = null, calSel = null;
+  const weekCache = new Map();
+  const DIARY_FIELD = { startPlace: 'start', finishPlace: 'finish', drops: 'drops' };
   const inWeek = (d) => weekKey && d >= weekKey && d <= Week.addDays(weekKey, 6);
-  function setDiary(date, text) {
-    if (text && text.trim()) diary[date] = text; else delete diary[date];
+  const dget = (date) => diary[date] || {};
+  function setDiary(date, field, text) {
+    const e = { ...dget(date) };
+    if (text && text.trim()) e[field] = text; else delete e[field];
+    if (Object.keys(e).length) diary[date] = e; else delete diary[date];
     LS.set('diary', diary);
     if (calMonth) renderCalGrid();
-    if (date === calSel && document.activeElement !== $('#calText')) $('#calText').value = diary[date] || '';
+    if (date === calSel) fillCalEditor();
+    updatePlaceList();
   }
+  // The timesheet row the tacho gives for any date (computed per week, cached).
+  function tachoDay(date) {
+    if (!card) return null;
+    const s = Week.sundayOf(Date.parse(date + 'T12:00:00Z'));
+    if (!weekCache.has(s)) weekCache.set(s, Week.computeWeek(card, prep, s, { base: basePlace(), awayKm: +profile.awayKm || 25 }));
+    const r = weekCache.get(s).rows[Math.round((Date.parse(date) - Date.parse(s)) / 86400000)];
+    return r && r.startTime ? r : null;
+  }
+  const fixLabel = (fix) => (fix && fix.exact ? label(fix.pos) : '');
+  const gpsDrops = (r) => r.drops.map((d) => (d.op === 1 ? 'Load ' : '') + (label(d.pos) || '…')).join(', ');
   // Drop names you've used before, most used first, for one-tap entry.
   function frequentDrops() {
     const n = new Map();
-    for (const t of Object.values(diary)) for (const raw of t.split(/[,\n]+/)) {
+    for (const e of Object.values(diary)) for (const raw of (e.drops || '').split(/[,\n]+/)) {
       const x = raw.trim(); if (x.length < 2) continue;
-      const k = x.toLowerCase(), e = n.get(k) || { name: x, c: 0 }; e.c++; n.set(k, e);
+      const k = x.toLowerCase(), v = n.get(k) || { name: x, c: 0 }; v.c++; n.set(k, v);
     }
-    return [...n.values()].sort((a, b) => b.c - a.c).slice(0, 18).map((e) => e.name);
+    return [...n.values()].sort((a, b) => b.c - a.c).slice(0, 18).map((v) => v.name);
   }
-  function shiftDays() {
-    const set = new Set();
-    if (prep) for (const s of prep.shifts) set.add(Week.localKey(s.cardIn || s.start));
-    return set;
+  // Suggestions for every place box: your saved places, built-in sites and places from the diary.
+  function updatePlaceList() {
+    const names = new Set();
+    for (const p of places) if (p.name) names.add(p.name);
+    for (const p of KNOWN_PLACES) names.add(p.name);
+    for (const e of Object.values(diary)) { if (e.start) names.add(e.start); if (e.finish) names.add(e.finish); }
+    $('#placeNames').innerHTML = [...names].sort().map((n) => `<option value="${esc(n)}">`).join('');
   }
   function renderCalGrid() {
     const [y, m] = calMonth.split('-').map(Number);
     $('#calTitle').textContent = `${MONTHS[m - 1]} ${y}`;
-    const first = `${calMonth}-01`, start = Week.addDays(first, -new Date(Date.UTC(y, m - 1, 1)).getUTCDay());
-    const worked = shiftDays(), today = todayKey();
+    const start = Week.addDays(`${calMonth}-01`, -new Date(Date.UTC(y, m - 1, 1)).getUTCDay()), today = todayKey();
     let html = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => `<div class="cal-h">${d}</div>`).join('');
     for (let i = 0; i < 42; i++) {
       const d = Week.addDays(start, i);
       if (i === 35 && d.slice(0, 7) !== calMonth) break;
+      const e = dget(d), r = tachoDay(d);
+      const mine = (v) => `<b>${esc(v)}</b>`, theirs = (v) => esc(v);
+      const s = e.start ? mine(e.start) : r ? theirs(fixLabel(r.startFix)) : '';
+      const f = e.finish ? mine(e.finish) : r ? theirs(fixLabel(r.endFix)) : '';
+      const drops = e.drops ? mine(e.drops) : r && r.drops.length ? theirs(gpsDrops(r)) : '';
+      const lines = [s || f ? `${s || '?'} → ${f || '?'}` : '', drops].filter(Boolean).join('<br>');
       const cls = ['cal-d', d.slice(0, 7) !== calMonth ? 'other' : '', d === calSel ? 'sel' : '', d === today ? 'today' : '', inWeek(d) ? 'wk' : ''].join(' ');
-      html += `<button type="button" class="${cls}" data-date="${d}"><span class="n">${+d.slice(8)}${worked.has(d) ? '<i class="dot" title="Tacho activity"></i>' : ''}</span>` +
-        `<span class="t">${esc((diary[d] || '').slice(0, 40))}</span></button>`;
+      html += `<button type="button" class="${cls}" data-date="${d}"><span class="n">${+d.slice(8)}${r ? '<i class="dot" title="Tacho activity"></i>' : ''}</span><span class="t">${lines}</span></button>`;
     }
     $('#cal').innerHTML = html;
     $$('#cal [data-date]').forEach((b) => b.onclick = () => selectCalDay(b.dataset.date));
   }
-  function selectCalDay(d) {
-    calSel = d;
-    calMonth = d.slice(0, 7);
-    renderCal();
+  function fillCalEditor() {
+    const e = dget(calSel), r = tachoDay(calSel);
+    const set = (sel, v) => { const el = $(sel); if (document.activeElement !== el && el.value !== v) el.value = v; };
+    set('#calStart', e.start || ''); set('#calFinish', e.finish || ''); set('#calText', e.drops || '');
+    $('#calStart').placeholder = (r && fixLabel(r.startFix)) || 'e.g. Scorrier';
+    $('#calFinish').placeholder = (r && fixLabel(r.endFix)) || 'e.g. Kepak Merthyr';
+    $('#calTacho').textContent = !card ? 'Load your .ddd file to see the tacho for this day. You can still write the diary now.'
+      : !r ? 'No tacho activity on this day.'
+        : `From the tacho: ${r.startTime}–${r.finishTime}` +
+          `${fixLabel(r.startFix) || fixLabel(r.endFix) ? ` · ${fixLabel(r.startFix) || '?'} → ${fixLabel(r.endFix) || '?'}` : ''}` +
+          ` · driving ${r.driving}${r.drops.length ? ` · GPS drops: ${gpsDrops(r)}` : ''}${r.stops.length ? ` · stops with work: ${r.stops.map((x) => x.label).join(', ')}` : ''}`;
   }
+  function selectCalDay(d) { calSel = d; calMonth = d.slice(0, 7); renderCal(); }
   function renderCal() {
     if (!calMonth) return;
     renderCalGrid();
     const wd = DAYS[new Date(Date.parse(calSel)).getUTCDay()];
     $('#calDate').textContent = `${wd} ${fmtLong(calSel)}`;
-    $('#calText').value = diary[calSel] || '';
+    fillCalEditor();
     $('#calChips').innerHTML = frequentDrops().map((n) => `<button type="button" class="chip">${esc(n)}</button>`).join('');
     $$('#calChips .chip').forEach((c) => c.onclick = () => {
       const ta = $('#calText');
@@ -586,16 +616,101 @@
     $('#calPrev').onclick = () => move(-1);
     $('#calNext').onclick = () => move(1);
     $('#calToday').onclick = () => selectCalDay(todayKey());
-    $('#calText').oninput = (e) => {
-      setDiary(calSel, e.target.value);
-      if (inWeek(calSel)) { refreshAuto(); schedulePdf(); }
+    const bind = (sel, field, fixOf) => {
+      const el = $(sel);
+      el.oninput = () => { setDiary(calSel, field, el.value); if (inWeek(calSel)) refreshAuto(); };
+      if (fixOf) el.onchange = () => {   // naming a place in the diary also teaches it for that GPS spot
+        const r = tachoDay(calSel), fix = r && fixOf(r);
+        if (profile.learn !== 'no' && fix && fix.exact && el.value.trim()) { learnPlace(fix.pos, el.value.trim()); weekCache.clear(); renderCalGrid(); refreshAuto(); }
+      };
+    };
+    bind('#calStart', 'start', (r) => r.startFix);
+    bind('#calFinish', 'finish', (r) => r.endFix);
+    bind('#calText', 'drops');
+    $('#calCopyTacho').onclick = () => {
+      const r = tachoDay(calSel);
+      if (!r) return alert('The tacho has nothing for this day.');
+      if (fixLabel(r.startFix)) setDiary(calSel, 'start', fixLabel(r.startFix));
+      if (fixLabel(r.endFix)) setDiary(calSel, 'finish', fixLabel(r.endFix));
+      if (r.drops.length && !dget(calSel).drops) setDiary(calSel, 'drops', gpsDrops(r));
+      if (inWeek(calSel)) refreshAuto();
+    };
+    $('#calClear').onclick = () => {
+      if (!diary[calSel] || !confirm('Clear the diary for this day?')) return;
+      delete diary[calSel]; LS.set('diary', diary); renderCal(); if (inWeek(calSel)) refreshAuto();
     };
     $('#calOpenWeek').onclick = () => {
       const s = Week.sundayOf(Date.parse(calSel + 'T12:00:00Z')), sel = $('#weekSel');
       if (![...sel.options].some((o) => o.value === s)) sel.add(new Option(`w/c Sunday ${fmtLong(s)}`, s), 0);
-      sel.value = s; selectWeek(s);
-      $('#days').scrollIntoView({ behavior: 'smooth' });
+      sel.value = s; selectWeek(s); showTab('sheet');
     };
+    updatePlaceList();
+  }
+
+  // ---- tabs -------------------------------------------------------------------------------------
+  function showTab(t) {
+    if (!['sheet', 'diary', 'me'].includes(t)) t = 'sheet';
+    $$('main.tab').forEach((m) => m.classList.toggle('on', m.id === 'tab-' + t));
+    $$('nav.tabs [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
+    try { localStorage.setItem('tt.tab', t); } catch { /* ignore */ }
+    if (location.hash !== '#' + t) history.replaceState(null, '', '#' + t);
+    if (t === 'diary') renderCal();
+    if (t === 'sheet') schedulePdf();
+    window.scrollTo(0, 0);
+  }
+  function setupTabs() {
+    $$('nav.tabs [data-tab]').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+    $$('a.tablink').forEach((a) => a.onclick = (e) => { e.preventDefault(); showTab(a.getAttribute('href').slice(1)); });
+    window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
+    let saved = 'sheet'; try { saved = localStorage.getItem('tt.tab') || 'sheet'; } catch { /* ignore */ }
+    showTab(location.hash.slice(1) || saved);
+  }
+
+  // ---- storage: keep it, back it up --------------------------------------------------------------
+  async function setupStorage() {
+    const el = $('#storageState');
+    let kept = false;
+    try {
+      if (navigator.storage && navigator.storage.persist) kept = (await navigator.storage.persisted()) || (await navigator.storage.persist());
+    } catch { /* not supported */ }
+    let used = '';
+    try { const est = await navigator.storage.estimate(); used = ` (${(est.usage / 1048576).toFixed(1)} MB used)`; } catch { /* ignore */ }
+    el.innerHTML = kept ? `✓ Saved on this device${used}. The browser has agreed not to clear it automatically.`
+      : `Saved on this device${used}. The browser hasn't promised to keep it forever, so download a copy now and then.`;
+  }
+  const stripPhotos = (w) => ({ ...w, expenses: (w.expenses || []).map((e) => { const { att, ...rest } = e; return att ? { ...rest, photo: att.name } : rest; }), other: [] });
+  async function exportAll() {
+    const weeks = {};
+    for (const [k, v] of await idb.entries()) if (String(k).startsWith('week:')) weeks[k] = stripPhotos(v);
+    const data = { app: 'tacho-timesheet', version: 2, exported: new Date().toISOString(), profile, places, diary, geo, weeks };
+    download(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }), `tacho-timesheet-data-${todayKey()}.json`);
+  }
+  async function importAll(file) {
+    const j = JSON.parse(await file.text());
+    // Merge, so restoring never wipes a signature, places or entries already on this device.
+    if (j.profile) { profile = { ...profile, ...j.profile }; LS.set('profile', profile); }
+    if (j.places) {
+      for (const p of j.places) {
+        const same = places.find((q) => Week.distKm(q, p) < 0.2);
+        if (same) Object.assign(same, p); else places.push(p);
+      }
+      const b = j.places.find((p) => p.base);
+      if (b) places.forEach((q) => { q.base = Week.distKm(q, b) < 0.2; });
+      LS.set('places', places);
+    }
+    if (j.diary) {
+      for (const [d, v] of Object.entries(j.diary)) diary[d] = { ...(typeof v === 'string' ? { drops: v } : v), ...dget(d) };
+      LS.set('diary', diary);
+    }
+    if (j.geo) { Object.assign(geo, j.geo); LS.set('geo', geo); }
+    for (const [k, v] of Object.entries(j.weeks || {})) {
+      const cur = await idb.get(k);
+      if (!cur) { await idb.set(k, v); continue; }
+      cur.days = cur.days.map((o, i) => ({ ...(v.days && v.days[i]), ...o }));
+      cur.foot = { ...v.foot, ...cur.foot };
+      for (const e of v.expenses || []) if (!cur.expenses.some((x) => x.id === e.id)) cur.expenses.push(e);
+      await idb.set(k, cur);
+    }
   }
 
   // ---- email text ---------------------------------------------------------------------------
@@ -745,7 +860,7 @@
     try { if (navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })) $('#share').classList.remove('hidden'); } catch { /* no file sharing */ }
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch((e) => console.warn('offline mode unavailable', e));
     $('#downloadBlank').onclick = async () => download(new Blob([await TimesheetPDF.build({})], { type: 'application/pdf' }), 'TC_timesheet_blank.pdf');
-    setupSignature(); setupSettings(); setupFill(); setupCal(); setupEmail(); renderPlaces();
+    setupSignature(); setupSettings(); setupFill(); setupCal(); setupEmail(); renderPlaces(); setupTabs(); setupStorage();
     window.TachoTimesheetDebug = { buildData, get card() { return card; } };
     idb.get('card').then((c) => c ? loadCard(c.bytes, c.name, false) : buildWeekList()).catch(() => buildWeekList());
   }
