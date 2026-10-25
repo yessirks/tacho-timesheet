@@ -106,8 +106,10 @@
   .wk-day { appearance: none; font: inherit; color: var(--ink); border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 6px 0 5px; display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; }
   .wk-day small { font-size: 11px; color: var(--muted); }
   .wk-day b { font-size: 16px; }
+  .wk-day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .wk-day.today b { color: var(--accent); }
   .wk-day.sel { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .wk-day.sel b { color: var(--accent-ink); }   /* today + selected: white on blue, never blue on blue */
   .wk-day.sel small { color: inherit; opacity: .8; }
   .wk-marks { display: flex; gap: 3px; height: 6px; }
   .wk-marks i { width: 6px; height: 6px; border-radius: 50%; display: block; }
