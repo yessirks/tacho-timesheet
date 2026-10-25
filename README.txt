@@ -41,7 +41,8 @@ Weekly use
    The badge next to the button shows "✓ Downloaded <date>" (orange if you changed the week
    after downloading), and sent weeks get a ✓ in the week list.
    Food goes in the form's "Market expenses" column (the form has no food column).
-5. Copy email, paste it into your email to the office, attach the PDF.
+5. Copy the subject (e.g. "Weekly Timesheet - Tancau Ciprian Iosif(18/10)") and the email,
+   paste them into your email to the office, attach the PDF. Change both in Me > Presets.
 
 First time only
 ---------------

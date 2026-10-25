@@ -1,6 +1,6 @@
 /* Offline support: serve the app from cache, refresh the cache in the background.
  * Bump VERSION when files change so phones pick up the new version. */
-const VERSION = 'tt-v11';
+const VERSION = 'tt-v12';
 const FILES = ['./', './index.html', './app.js', './tacho.js', './week.js', './form.js', './places.js', './scan.js', './logo.js', './lib/pdf-lib.min.js',
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './TC_timesheet_blank.pdf'];
 

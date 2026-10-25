@@ -1473,8 +1473,11 @@
   // ---- email text ---------------------------------------------------------------------------
   const DEFAULT_EMAIL = 'Hello,\n\nPlease find attached my timesheet for the week commencing {weekCommencing} (vehicle {vehicle}).\n\n' +
     'Days worked: {days}. Nights out: {nights}. Expenses: £{expenses}.\n\nKind regards,\n{name}';
-  function emailText() {
-    if (!ws) return '';
+  const DEFAULT_SUBJECT = 'Weekly Timesheet - {cardName}({wc})';
+  // "TANCAU CIPRIAN-IOSIF" -> "Tancau Ciprian-Iosif"
+  const titleCase = (t) => String(t || '').toLowerCase().replace(/(^|[\s'’-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+  const ddmm = (key) => fmtShort(key).slice(0, 5);
+  function emailVals() {
     const d = buildData(), days = d.p1.days;
     const list = days.map((x, i) => x.startTime ? `${DAYS[i].slice(0, 3)} ${fmtShort(Week.addDays(weekKey, i))}: ${x.startTime}-${x.finishTime}` +
       `${x.startPlace || x.finishPlace ? ` ${x.startPlace || '?'} to ${x.finishPlace || '?'}` : ''}${x.drops ? ` (${x.drops})` : ''}` : '').filter(Boolean).join('\n');
@@ -1484,15 +1487,32 @@
       weekCommencing: fmtShort(weekKey), weekEnding: fmtShort(Week.addDays(weekKey, 6)), vehicle: footVal('vehicle') || '',
       days: days.filter((x) => x.startTime || x.finishTime).length, nights: d.p2.totals.uk + d.p2.totals.eu,
       expenses: (Number(d.p2.totals.total) || 0).toFixed(2), daysList: list, file: fileName(),
+      cardName: titleCase(id ? `${id.surname} ${id.firstNames}` : footVal('name')), wc: ddmm(weekKey), we: ddmm(Week.addDays(weekKey, 6)),
     };
-    return (profile.emailTpl || DEFAULT_EMAIL).replace(/\{(\w+)\}/g, (m, k) => (k in vals ? vals[k] : m));
+    return vals;
   }
-  function updateEmail() { const o = $('#emailOut'); if (o) o.value = emailText(); }
+  const fill = (tpl, vals) => tpl.replace(/\{(\w+)\}/g, (m, k) => (k in vals ? vals[k] : m));
+  function emailText() { return ws ? fill(profile.emailTpl || DEFAULT_EMAIL, emailVals()) : ''; }
+  function emailSubject() { return ws ? fill(profile.emailSubjTpl || DEFAULT_SUBJECT, emailVals()).trim() : ''; }
+  function updateEmail() {
+    const o = $('#emailOut'), sj = $('#emailSubj');
+    if (o) o.value = emailText();
+    if (sj) sj.value = emailSubject();
+  }
   function setupEmail() {
     const t = $('#emailTpl');
     t.value = profile.emailTpl || DEFAULT_EMAIL;
     t.oninput = () => { profile.emailTpl = t.value; LS.set('profile', profile); updateEmail(); };
-    $('#emailReset').onclick = () => { delete profile.emailTpl; LS.set('profile', profile); t.value = DEFAULT_EMAIL; updateEmail(); };
+    const sj = $('#emailSubjTpl');
+    sj.value = profile.emailSubjTpl || DEFAULT_SUBJECT;
+    sj.oninput = () => { profile.emailSubjTpl = sj.value; LS.set('profile', profile); updateEmail(); };
+    $('#emailReset').onclick = () => { delete profile.emailTpl; delete profile.emailSubjTpl; LS.set('profile', profile); t.value = DEFAULT_EMAIL; sj.value = DEFAULT_SUBJECT; updateEmail(); };
+    $('#emailSubjCopy').onclick = async () => {
+      const txt = emailSubject();
+      try { await navigator.clipboard.writeText(txt); } catch { const o = $('#emailSubj'); o.select(); document.execCommand('copy'); }
+      $('#emailSubjCopy').textContent = 'Copied ✓';
+      setTimeout(() => { $('#emailSubjCopy').textContent = 'Copy'; }, 1500);
+    };
     $('#emailCopy').onclick = async () => {
       const txt = emailText();
       try { await navigator.clipboard.writeText(txt); } catch { const o = $('#emailOut'); o.select(); document.execCommand('copy'); }
@@ -1612,7 +1632,7 @@
       const bytes = await TimesheetPDF.build(buildData(), { page2: footVal('page2') !== 'no' });
       const file = new File([bytes], fileName(), { type: 'application/pdf' });
       try {
-        await navigator.share({ files: [file], title: fileName(), text: emailText() });
+        await navigator.share({ files: [file], title: emailSubject() || fileName(), text: emailText() });
         markDone('shared'); toast('✓ Shared ' + fileName());
       } catch (e) { if (e.name !== 'AbortError') alert('Sharing failed: ' + e.message); }
     };

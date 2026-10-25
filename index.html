@@ -397,7 +397,8 @@
 
     <section>
       <h2>Email to the office <span class="sub">Copy it into your email, or use Share to send it with the PDF.</span></h2>
-      <textarea id="emailOut" rows="8" readonly></textarea>
+      <div class="f"><span class="lbl">Subject</span><div class="inp-row"><input id="emailSubj" readonly><button type="button" class="btn small" id="emailSubjCopy">Copy</button></div></div>
+      <div class="f" style="margin-top:10px"><span class="lbl">Message</span><textarea id="emailOut" rows="8" readonly></textarea></div>
       <div class="actions" style="margin-top:8px"><button class="btn small primary" id="emailCopy">Copy email</button>
         <a href="#me" class="tablink small">Change the wording</a></div>
     </section>
@@ -531,9 +532,10 @@
         <label class="f">Read receipts automatically (amount, VAT, type)<select id="setAutoRead"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Write "Drop" before drop names on the timesheet<select id="setDropWord"><option value="no">No (just the name)</option><option value="yes">Yes</option></select></label>
       </div>
-      <h2 style="margin-top:16px">Email wording</h2>
-      <textarea id="emailTpl" rows="8"></textarea>
-      <p class="small muted">Fill-ins: {name} {firstName} {weekCommencing} {weekEnding} {vehicle} {days} {nights} {expenses} {daysList} {file}</p>
+      <h2 style="margin-top:16px">Email to the office</h2>
+      <label class="f">Subject<input id="emailSubjTpl" placeholder="Weekly Timesheet - {cardName}({wc})"></label>
+      <label class="f" style="margin-top:10px">Message<textarea id="emailTpl" rows="8"></textarea></label>
+      <p class="small muted">Fill-ins: {cardName} (e.g. Tancau Ciprian Iosif) {name} {firstName} {wc} (week start, 18/10) {we} (week end, 24/10) {weekCommencing} {weekEnding} {vehicle} {days} {nights} {expenses} {daysList} {file}</p>
       <button class="btn small" id="emailReset">Back to default wording</button>
       <button class="btn small hidden" id="unhideStops"></button>
     </section>
