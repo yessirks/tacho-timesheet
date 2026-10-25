@@ -139,7 +139,7 @@
       }
       geoQueue.shift();
       refreshAuto();
-      if (calMonth && $('#tab-diary').classList.contains('on')) { renderCalGrid(); fillCalEditor(); renderTimelineDay(); }
+      if (calMonth && $('#tab-diary').classList.contains('on')) { renderCalGrid(); fillCalEditor(); }
     }
     geoBusy = false;
     setStatus('');
@@ -228,8 +228,10 @@
     if (save) idb.set('card', { name, bytes });
     const id = card.identification, days = card.days;
     const span = days.length ? `${fmtShort(Week.localKey(+days[0].date))} – ${fmtShort(Week.localKey(+days[days.length - 1].date))}` : 'no activity';
-    $('#cardInfo').innerHTML = `<b>${esc(id.firstNames)} ${esc(id.surname)}</b> · card ${esc(id.cardNumber)} · activity ${span}` +
-      (card.lastDownload ? ` · downloaded ${fmtShort(Week.localKey(+card.lastDownload))}` : '') + ` · <span class="muted">${esc(name || '')}</span>`;
+    const until = days.length ? fmtDay(Week.localKey(+days[days.length - 1].date)) : '';
+    $('#cardInfo').innerHTML = `<span class="pill">👤 <b>${esc(id.firstNames)} ${esc(id.surname)}</b></span>` +
+      (until ? `<span class="pill dim">🚚 tacho to ${until}</span>` : '');
+    $('#cardInfo').title = `Card ${id.cardNumber} · activity ${span}` + (card.lastDownload ? ` · downloaded ${fmtShort(Week.localKey(+card.lastDownload))}` : '') + ` · ${name || ''}`;
     $('#dropZone').classList.add('hidden');
     renderPlaces();
     buildWeekList();
@@ -244,7 +246,7 @@
     const sel = $('#weekSel');
     sel.innerHTML = weeks.map((k) => {
       const n = prep ? prep.shifts.filter((s) => Week.sundayOf(s.cardIn || s.start) === k).length : 0;
-      return `<option value="${k}">w/c Sunday ${fmtLong(k)}${n ? ` · ${n} shift${n > 1 ? 's' : ''}` : ''}</option>`;
+      return `<option value="${k}">w/c Sun ${fmtDay(k)} ${k.slice(0, 4)}${n ? ` · ${n} shift${n > 1 ? 's' : ''}` : ''}</option>`;
     }).join('');
     const want = keep && weeks.includes(keep) ? keep : weeks[0];
     sel.value = want;
@@ -270,7 +272,6 @@
     const n = week ? week.rows.filter((r) => r.startTime).length : 0;
     $('#weekInfo').textContent = `${fmtShort(key)} – ${fmtShort(Week.addDays(key, 6))}` + (card ? ` · ${n} day${n === 1 ? '' : 's'} on the tacho` : ' · no card loaded: fill in by hand');
     renderDays(); renderFoot(); renderExpenses(); renderOther(); showDone();
-    if (!calSel || !inWeek(calSel)) { calSel = inWeek(todayKey()) ? todayKey() : key; calMonth = calSel.slice(0, 7); }
     if ($('#tab-diary').classList.contains('on')) renderCal();
     schedulePdf();
   }
@@ -456,7 +457,7 @@
       <td class="num"><input data-e="vat" type="number" step="0.01" min="0" value="${esc(e.vat)}"></td>
       <td>${e.att ? `${attThumb(e.att)} <button class="btn small link" data-act="unatt" title="Remove receipt">×</button>`
         : '<label class="btn small">📷 Scan<input type="file" data-act="scan" accept="image/*" capture="environment" hidden></label> <label class="btn small">📎 File<input type="file" data-act="att" accept="image/*,application/pdf" hidden></label>'}</td>
-      <td><button class="btn small link" data-act="del" title="Delete row">✕</button></td></tr>`).join('')
+      <td><button class="btn small link" data-act="del" title="Delete this expense">🗑</button></td></tr>`).join('')
       || '<tr><td colspan="7" class="muted small">No expenses this week.</td></tr>';
     $$('tr[data-n]', tb).forEach((tr) => {
       const e = ws.expenses[+tr.dataset.n];
@@ -623,7 +624,7 @@
     const save = (l, redraw) => { setDiary(date, 'stops', l); if (redraw) draw(); syncStopEditors(ed); };
     function draw() {
       const l = list();
-      box.innerHTML = `<div class="stops">${l.map((s, n) => `<div class="stop" data-n="${n}">
+      box.innerHTML = (l.length ? '' : '<p class="small muted empty">Nothing added yet.</p>') + `<div class="stops">${l.map((s, n) => `<div class="stop" data-n="${n}">
           <select data-s="type" aria-label="Type">${Object.entries(STOP_TYPES).map(([k, v]) => `<option value="${k}" ${s.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
           <input data-s="name" value="${esc(s.name)}" placeholder="Name, e.g. Sainsbury's Paignton" aria-label="Name">
           <input data-s="ref" value="${esc(s.ref || '')}" placeholder="Trailer / ref" aria-label="Trailer or reference">
@@ -702,13 +703,13 @@
     function draw() {
       const rows = w.expenses.map((e, n) => ({ e, n })).filter((x) => +x.e.day === i);
       const tot = rows.reduce((a, x) => a + (parseFloat(x.e.amount) || 0), 0);
-      box.innerHTML = rows.map(({ e, n }) => `<div class="exp-row" data-n="${n}">
+      box.innerHTML = (rows.length ? '' : '<p class="small muted empty">No expenses on this day.</p>') + rows.map(({ e, n }) => `<div class="exp-row" data-n="${n}">
           <select data-e="type" aria-label="Type">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${e.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
           <input data-e="note" value="${esc(e.note)}" placeholder="Note, e.g. Gordano" aria-label="Note">
           <input data-e="amount" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(e.amount)}" placeholder="£" aria-label="Amount">
           <span class="exp-photo">${e.att ? `${attThumb(e.att)}<button type="button" class="btn small link" data-act="unatt" title="Remove photo">✕</button>`
             : '<label class="btn small">📷 Scan<input type="file" data-act="scan" accept="image/*" capture="environment" hidden></label><label class="btn small">📎 File<input type="file" data-act="att" accept="image/*,application/pdf" hidden></label>'}</span>
-          <button type="button" class="btn small link" data-act="del" title="Delete">✕</button></div>`).join('') +
+          <button type="button" class="btn small link" data-act="del" title="Delete this expense">🗑</button></div>`).join('') +
         `<div class="add-row">${Object.entries(TYPES).map(([k, v]) => `<button type="button" class="btn small" data-addexp="${k}">+ ${v}</button>`).join('')}</div>` +
         (tot ? `<div class="small" style="margin-top:6px">Total this day: <b>£${tot.toFixed(2)}</b></div>` : '');
       $$('.exp-row', box).forEach((row) => {
@@ -792,8 +793,8 @@
       const f = e.finish ? mine(e.finish) : r ? theirs(fixLabel(r.endFix)) : '';
       const stops = fmtStops(e.stops) ? mine(fmtStops(e.stops)) : r && r.drops.length ? theirs(fmtStops(gpsStops(r))) : '';
       const lines = [s || f ? `${s || '?'} → ${f || '?'}` : '', stops].filter(Boolean).join('<br>');
-      const cls = ['cal-d', d.slice(0, 7) !== calMonth ? 'other' : '', d === calSel ? 'sel' : '', d === today ? 'today' : '', inWeek(d) ? 'wk' : ''].join(' ');
-      html += `<button type="button" class="${cls}" data-date="${d}"><span class="n">${+d.slice(8)}${r ? '<i class="dot" title="Tacho activity"></i>' : ''}` +
+      const cls = ['cal-d', d.slice(0, 7) !== calMonth ? 'other' : '', d === calSel ? 'sel' : '', d === today ? 'today' : ''].join(' ');
+      html += `<button type="button" class="${cls}" data-date="${d}"><span class="n"><span class="num">${+d.slice(8)}</span>${r ? '<i class="dot" title="Tacho activity"></i>' : ''}` +
         `${cash ? `<span class="cash">£${cash.toFixed(cash % 1 ? 2 : 0)}</span>` : ''}</span><span class="t">${lines}</span></button>`;
     }
     $('#cal').innerHTML = html;
@@ -807,9 +808,9 @@
     set('#calStart', e.start || ''); set('#calFinish', e.finish || '');
     $('#calStart').placeholder = (r && fixLabel(r.startFix)) || 'e.g. Scorrier';
     $('#calFinish').placeholder = (r && fixLabel(r.endFix)) || 'e.g. Kepak Merthyr';
-    $('#calTacho').textContent = !card ? 'Load your .ddd file to see the tacho for this day. You can still write the diary now.'
-      : !r ? 'No tacho activity on this day.'
-        : `From the tacho: ${r.startTime}–${r.finishTime}` +
+    $('#calTacho').textContent = !card ? '🚚 Load your .ddd file to see the tacho for this day. You can still write the diary now.'
+      : !r ? '🚚 No tacho activity on this day.'
+        : `🚚 Tacho: ${r.startTime}–${r.finishTime}` +
           `${fixLabel(r.startFix) || fixLabel(r.endFix) ? ` · ${fixLabel(r.startFix) || '?'} → ${fixLabel(r.endFix) || '?'}` : ''}` +
           ` · driving ${r.driving}${r.drops.length ? ` · GPS drops: ${fmtStops(gpsStops(r))}` : ''}${r.stops.length ? ` · stops with work: ${r.stops.map((x) => x.label).join(', ')}` : ''}`;
   }
@@ -820,6 +821,8 @@
     renderCalWeek();
     const wd = DAYS[dayIdx(calSel)];
     $('#calDate').textContent = `${wd} ${fmtLong(calSel)}`;
+    const t = todayKey();
+    $('#calBadge').textContent = calSel === t ? 'Today' : calSel === Week.addDays(t, -1) ? 'Yesterday' : calSel === Week.addDays(t, 1) ? 'Tomorrow' : '';
     fillCalEditor();
     const ed = stopsEditor($('#calStops'), calSel);
     const freq = frequentStops();
@@ -835,7 +838,6 @@
       onHold(c, () => chipMenu(s));
     });
     dayExpensesEditor($('#calExp'), calSel);
-    renderTimelineDay();
   }
   function setupCal() {
     calSel = todayKey(); calMonth = calSel.slice(0, 7);
@@ -843,7 +845,6 @@
     $('#calPrev').onclick = () => move(-1);
     $('#calNext').onclick = () => move(1);
     $('#calToday').onclick = () => selectCalDay(todayKey());
-    $('#tlImport').onclick = importTimelineSheet;
     $('#calPrevDay').onclick = () => selectCalDay(Week.addDays(calSel, -1));
     $('#calNextDay').onclick = () => selectCalDay(Week.addDays(calSel, 1));
     $('#calMonthToggle').onclick = () => { const on = $('#diary').classList.toggle('show-month'); $('#calMonthToggle').textContent = on ? 'Week ▴' : 'Month ▾'; };
@@ -911,7 +912,7 @@
     for (const [k, v] of weekStates) if (v.done) done.add(k);
     for (const o of $('#weekSel').options) {
       o.dataset.base = o.dataset.base || o.textContent;
-      o.textContent = o.dataset.base + (done.has(o.value) ? '  ✓ sent' : '');
+      o.textContent = o.dataset.base + (done.has(o.value) ? ' · ✓ sent' : '');
     }
   }
 
@@ -1400,110 +1401,6 @@
     }, { passive: true });
   }
 
-  // ---- Google Maps Timeline: where your phone says you stopped -----------------------------------------
-  let timeline = [];   // [{ s, e, lat, lon, n, a }] kept in IndexedDB
-  const DAY_MS = 86400000;
-  function dayVisits(date) {
-    const a = Date.parse(date + 'T00:00:00Z') - 2 * 3600000, b = a + DAY_MS + 4 * 3600000;   // generous; filtered by local date below
-    return timeline.filter((v) => v.e > a && v.s < b && (v.e - v.s) >= 5 * 60000)
-      .filter((v) => Week.localKey(v.s) === date || Week.localKey(v.e) === date || (Week.localKey(v.s) < date && Week.localKey(v.e) > date));
-  }
-  const atBase = (v) => { const b = basePlace(); return b && Week.distKm(b, v) * 1000 <= (b.radius || 1500); };
-  // Best name for a visit: Takeout's own name, your places, a shop/depot right there, else the town.
-  async function nameFor(v) {
-    if (v.n) return v.n;
-    const sp = savedAt(v);
-    if (sp && sp.name) return sp.name;
-    try {
-      const near = await Geo.nearby(v.lat, v.lon, 90);
-      const p = near.find((x) => x.dist < 70);
-      if (p) { const t = p.city; return t && !p.name.toLowerCase().includes(t.toLowerCase()) ? `${p.name} ${t}` : p.name; }
-    } catch { /* fall back to the town */ }
-    const cached = label(v);
-    if (cached) return cached;
-    try { const r = await Geo.reverse(v.lat, v.lon); return r.town || `${v.lat.toFixed(4)}, ${v.lon.toFixed(4)}`; } catch { return `${v.lat.toFixed(4)}, ${v.lon.toFixed(4)}`; }
-  }
-  const quickName = (v) => v.n || (savedAt(v) || {}).name || label(v) || '…';
-  function renderTimelineDay() {
-    const box = $('#calTimeline');
-    if (!box) return;
-    if (!timeline.length) { box.innerHTML = ''; return; }
-    const list = dayVisits(calSel);
-    if (!list.length) { box.innerHTML = '<p class="small muted">🗺 No Google Timeline stops on this day.</p>'; return; }
-    box.innerHTML = `<h3 class="sub-h">🗺 Google Timeline <span class="muted small">· ${list.length} stop${list.length > 1 ? 's' : ''}</span></h3>
-      <div class="tl-list">${list.map((v, i) => {
-        const mins = Math.round((v.e - v.s) / 60000), from = Week.localKey(v.s) < calSel ? '◂ ' : '', to = Week.localKey(v.e) > calSel ? ' ▸' : '';
-        return `<div class="tl-row" data-i="${i}"><div class="tl-main"><b>${esc(quickName(v))}${atBase(v) ? ' <span class="tag">base</span>' : ''}</b>
-          <small>${from}${Week.local(v.s).time}–${Week.local(v.e).time}${to} · ${mins >= 60 ? Week.hm(mins) + ' h' : mins + ' min'}</small></div>
-          <div class="tl-act"><button type="button" class="btn small" data-t="drop">+ Drop</button><button type="button" class="btn small" data-t="pickup">+ Pickup</button><button type="button" class="btn small" data-t="star" title="Star this spot">⭐</button></div></div>`;
-      }).join('')}</div>
-      <div class="actions" style="margin-top:8px"><button type="button" class="btn small primary" data-t="fill">Fill this day from Timeline</button></div>`;
-    $$('.tl-row', box).forEach((row) => {
-      const v = list[+row.dataset.i];
-      $$('[data-t]', row).forEach((b) => b.onclick = async () => {
-        b.disabled = true;
-        const name = await nameFor(v);
-        b.disabled = false;
-        if (b.dataset.t === 'star') return starEditor({ name, lat: v.lat, lon: v.lon });
-        const l = (dget(calSel).stops || []).filter((x) => (x.name || '').trim());
-        l.push({ type: b.dataset.t, name, lat: v.lat, lon: v.lon });
-        setDiary(calSel, 'stops', l); renderCal(); toast(`Added ${STOP_TYPES[b.dataset.t]} ${name}`);
-      });
-    });
-    $('[data-t=fill]', box).onclick = async (e) => {
-      e.target.disabled = true; e.target.textContent = 'Filling…';
-      const n = await fillFromTimeline(calSel, list);
-      e.target.disabled = false; e.target.textContent = 'Fill this day from Timeline';
-      renderCal(); toast(n ? `Filled ${n} item${n > 1 ? 's' : ''} from Google Timeline` : 'Nothing new to add');
-    };
-  }
-  // First stop = start, last = finish (only if empty); stops of 10+ minutes in between become drops.
-  async function fillFromTimeline(date, list) {
-    let n = 0;
-    const e = dget(date), long = list.filter((v) => v.e - v.s >= 10 * 60000);
-    if (!long.length) return 0;
-    if (!e.start) { setDiary(date, 'start', await nameFor(long[0])); n++; }
-    if (!e.finish && long.length > 1) { setDiary(date, 'finish', await nameFor(long[long.length - 1])); n++; }
-    const stops = (dget(date).stops || []).filter((x) => (x.name || '').trim());
-    const have = new Set(stops.map((x) => x.name.trim().toLowerCase()));
-    for (const v of long.slice(1, -1)) {
-      if (atBase(v)) continue;
-      const name = await nameFor(v);
-      if (have.has(name.toLowerCase())) continue;
-      if (/services|truck ?stop|lorry ?park|truckstop/i.test(name)) continue;   // breaks, not drops
-      have.add(name.toLowerCase());
-      stops.push({ type: 'drop', name, lat: v.lat, lon: v.lon }); n++;
-    }
-    setDiary(date, 'stops', stops);
-    return n;
-  }
-  function importTimelineSheet() {
-    const sh = sheet(`<h3>🗺 Import Google Maps Timeline</h3>
-      <p class="small">Google keeps your Timeline on your phone. Export it once, then pick the file here:</p>
-      <ul class="small tl-help">
-        <li><b>Android:</b> Settings › Location › Location services › Timeline › <b>Export Timeline data</b> (saves <i>Timeline.json</i>).</li>
-        <li><b>iPhone:</b> Google Maps › your picture › Your Timeline › ⋯ › Location &amp; privacy settings › <b>Export Timeline data</b>.</li>
-        <li><b>Older data:</b> Google Takeout › Location History › the <i>Semantic Location History</i> JSON files (unzip first; you can pick several).</li>
-      </ul>
-      <p class="small muted">Timeline has to be switched on in Google Maps to record anything. The file stays on this device; only the place names are looked up online.</p>
-      <label class="btn primary" style="display:inline-flex">Choose Timeline file(s)<input type="file" data-x="file" accept=".json,application/json" multiple hidden></label>
-      <div class="small" data-x="status" style="margin-top:10px"></div>
-      ${timeline.length ? `<div class="actions" style="margin-top:10px"><button type="button" class="btn small" data-x="clear">Remove imported Timeline (${timeline.length} stops)</button></div>` : ''}
-      <div class="actions sheet-foot"><button type="button" class="btn small" data-close>Close</button></div>`);
-    $('[data-x=file]', sh).onchange = async (ev) => {
-      const st = $('[data-x=status]', sh);
-      let all = [], errs = [];
-      for (const f of ev.target.files) { try { all = all.concat(Timeline.parse(await f.text())); } catch (err) { errs.push(`${f.name}: ${err.message}`); } }
-      const m = Timeline.merge(timeline, all);
-      timeline = m.list; await idb.set('timeline', timeline);
-      const days = new Set(all.map((v) => Week.localKey(v.s))).size;
-      st.innerHTML = (m.added ? `✓ Added <b>${m.added}</b> stops over ${days} day${days === 1 ? '' : 's'}.` : 'No new stops in that file.') + (errs.length ? `<br><span class="warn-txt">${errs.map(esc).join('<br>')}</span>` : '');
-      renderCal();
-    };
-    const clr = $('[data-x=clear]', sh);
-    if (clr) clr.onclick = async () => { if (!confirm('Remove the imported Google Timeline from this device?')) return; timeline = []; await idb.set('timeline', []); sh.close(); renderCal(); };
-  }
-
   // ---- tabs -------------------------------------------------------------------------------------
   function showTab(t) {
     if (!['sheet', 'diary', 'places', 'me'].includes(t)) t = 'sheet';
@@ -1512,7 +1409,7 @@
     ['sheet', 'diary', 'places', 'me'].forEach((x) => document.body.classList.toggle('tab-' + x, x === t));
     try { localStorage.setItem('tt.tab', t); } catch { /* ignore */ }
     if (location.hash !== '#' + t) history.replaceState(null, '', '#' + t);
-    if (t === 'diary') renderCal();
+    if (t === 'diary') { calSel = todayKey(); calMonth = calSel.slice(0, 7); renderCal(); }   // the diary always opens on today
     if (t === 'places') renderPlacesTab();
     if (t === 'sheet') schedulePdf();
     window.scrollTo(0, 0);
@@ -1541,7 +1438,7 @@
   async function exportAll() {
     const weeks = {};
     for (const [k, v] of await idb.entries()) if (String(k).startsWith('week:')) weeks[k] = stripPhotos(v);
-    const data = { app: 'tacho-timesheet', version: 4, exported: new Date().toISOString(), profile, places, stars, diary, geo, weeks, timeline };
+    const data = { app: 'tacho-timesheet', version: 4, exported: new Date().toISOString(), profile, places, stars, diary, geo, weeks };
     download(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }), `tacho-timesheet-data-${todayKey()}.json`);
   }
   async function importAll(file) {
@@ -1563,7 +1460,6 @@
     }
     if (j.geo) { Object.assign(geo, j.geo); LS.set('geo', geo); }
     if (j.stars) j.stars.forEach(addStar);
-    if (j.timeline) { timeline = Timeline.merge(timeline, j.timeline).list; await idb.set('timeline', timeline); }
     for (const [k, v] of Object.entries(j.weeks || {})) {
       const cur = await idb.get(k);
       if (!cur) { await idb.set(k, v); continue; }
@@ -1736,7 +1632,7 @@
     $('#downloadBlank').onclick = async () => download(new Blob([await TimesheetPDF.build({})], { type: 'application/pdf' }), 'TC_timesheet_blank.pdf');
     setupSignature(); setupSettings(); setupFill(); setupCal(); setupEmail(); renderPlaces(); setupPlaces(); setupTabs(); setupStorage();
     window.TachoTimesheetDebug = { buildData, get card() { return card; } };
-    idb.get('timeline').then((t) => { if (Array.isArray(t)) { timeline = t; if ($('#tab-diary').classList.contains('on')) renderCal(); } }).catch(() => {});
+    idb.set('timeline', null);   // the Google Timeline import was removed; drop any old data
     $('#setAutoRead').value = profile.autoRead || 'yes';
     $('#setAutoRead').onchange = (e) => { profile.autoRead = e.target.value; LS.set('profile', profile); };
     idb.get('card').then((c) => c ? loadCard(c.bytes, c.name, false) : buildWeekList()).catch(() => buildWeekList());

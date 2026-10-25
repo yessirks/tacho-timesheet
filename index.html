@@ -94,12 +94,6 @@
   .places td { padding: 3px 4px; }
   footer { color: var(--muted); font-size: 12px; padding: 0 20px 20px; }
   .hidden { display: none !important; }
-  .tl-list { display: flex; flex-direction: column; gap: 6px; }
-  .tl-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
-  .tl-main { display: flex; flex-direction: column; min-width: 0; }
-  .tl-main small { color: var(--muted); }
-  .tl-act { display: flex; gap: 6px; }
-  .tl-help { padding-left: 18px; margin: 6px 0; } .tl-help li { margin-bottom: 4px; }
   /* ---------- shared polish ---------- */
   .btn { transition: transform .08s, background .15s, border-color .15s; }
   .btn:active, .chip:active, .pick:active, .wk-day:active, .cal-d:active { transform: scale(.97); }
@@ -280,11 +274,65 @@
   .checks { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
   label.check { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
   label.check input { width: auto; margin: 0; }
+
+  /* ---------- polish ---------- */
+  :root { --shadow: 0 1px 2px rgba(16,24,40,.05), 0 2px 6px rgba(16,24,40,.04); }
+  header { box-shadow: 0 1px 0 var(--line); border-bottom: 0; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .brand h1 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+  .card-info { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; background: var(--soft); color: var(--ink); font-size: 12.5px; white-space: nowrap; }
+  .pill.dim { color: var(--muted); background: none; border: 1px solid var(--line); }
+  main { max-width: 1360px; margin: 0 auto; }
+  section { box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--line) 75%, transparent); padding: 16px 18px; }
+  section > h2 { font-size: 15px; font-weight: 700; display: block; margin-bottom: 12px; }
+  section > h2 .sub { display: block; font-weight: 400; margin-top: 3px; }
+  .btn { border-radius: 10px; font-weight: 500; }
+  .btn:hover { background: var(--soft); }
+  .btn.primary { box-shadow: 0 1px 2px rgba(31,79,191,.25); }
+  .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+  .btn.link:hover { background: none; text-decoration: underline; }
+  input, select, textarea { border-radius: 10px; transition: border-color .15s, box-shadow .15s; }
+  input:hover, select:hover, textarea:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+  /* your own entries: calm blue, not a warning colour */
+  .edited { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)) !important; background: color-mix(in srgb, var(--accent) 6%, var(--field)) !important; }
+  .day { border-radius: 12px; }
+  .empty { margin: 2px 0 6px; }
+  /* diary */
+  .day-nav { margin-bottom: 12px; }
+  .day-title { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .day-title h2 { font-size: 18px; margin: 0; text-align: center; }
+  .badge { font-size: 11.5px; font-weight: 600; color: var(--accent); background: var(--soft); padding: 1px 10px; border-radius: 20px; }
+  .badge:empty { display: none; }
+  .icon-btn { appearance: none; flex: none; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; transition: border-color .15s, transform .08s; }
+  .icon-btn:hover { border-color: var(--accent); }
+  .icon-btn:active { transform: scale(.94); }
+  .note-tacho { font-size: 13px; border: 1px solid color-mix(in srgb, var(--ok) 25%, var(--line)); background: color-mix(in srgb, var(--ok) 7%, var(--panel)); border-radius: 12px; padding: 9px 12px; margin-bottom: 14px; }
+  .ed-block { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+  .note-tacho + .ed-block { border-top: 0; margin-top: 0; padding-top: 0; }
+  .ed-h { font-size: 14px; font-weight: 700; margin: 0 0 10px; }
+  .ed-h .muted { font-weight: 400; margin-left: 4px; }
+  .ed-foot { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .hint { margin-top: 10px; }
+  .cal-d { border-radius: 10px; transition: border-color .15s, background .15s; }
+  .cal-d:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+  .cal-d .num { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; border-radius: 11px; }
+  .cal-d.today .num { background: var(--accent); color: var(--accent-ink); }
+  .cal-d.sel { background: var(--soft); }
+  .stop select, .exp-row select { font-weight: 500; }
+  @media (max-width: 700px) {
+    .brand { flex: 1; } .brand img { width: 26px; height: 26px; } .brand h1 { font-size: 16px; }
+    section { padding: 14px; }
+    .day-title h2 { font-size: 17px; }
+    .ed-foot .btn { flex: 1 1 auto; }
+    .ed-foot #calOpenWeek { margin-left: 0 !important; flex-basis: 100%; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>Tacho Timesheet</h1>
+  <div class="brand"><img src="icons/icon-192.png" alt=""><h1>Tacho Timesheet</h1></div>
   <div class="card-info" id="cardInfo">No card file loaded</div>
   <label class="btn load-btn"><span class="ic">📂</span><span class="lb">Load .ddd file</span><input type="file" id="fileInput" hidden></label>
   <nav class="tabs" role="tablist">
@@ -307,14 +355,14 @@
       <h2>Week <span class="sub">Sunday to Saturday</span></h2>
       <div class="row">
         <button class="btn" id="prevWeek" title="Previous week">◀</button>
-        <select id="weekSel" style="max-width: 320px"></select>
+        <select id="weekSel" style="max-width: 380px"></select>
         <button class="btn" id="nextWeek" title="Next week">▶</button>
         <span class="muted small" id="weekInfo"></span>
       </div>
     </section>
 
     <section>
-      <h2>Days <span class="sub">Your diary first, then the tacho. Edited fields turn orange; ↺ puts the tacho times back.</span></h2>
+      <h2>Days <span class="sub">Your diary first, then the tacho. Your own entries are tinted blue; ↺ puts the tacho times back.</span></h2>
       <div id="days"></div>
     </section>
 
@@ -373,7 +421,7 @@
       <h2>Diary <span class="sub">Write down each day's places and drops as you go. When you load the .ddd they go straight into the timesheet.</span></h2>
       <div class="row" style="justify-content:space-between">
         <div class="row month-nav"><button class="btn small" id="calPrev">◀</button><b id="calTitle" style="min-width:120px;text-align:center"></b><button class="btn small" id="calNext">▶</button></div>
-        <div class="row"><button class="btn small" id="calToday">Today</button><button class="btn small" id="calMonthToggle">Month ▾</button><button class="btn small" id="tlImport">🗺 Google Timeline</button></div>
+        <div class="row"><button class="btn small" id="calToday">Today</button><button class="btn small" id="calMonthToggle">Month ▾</button></div>
       </div>
       <div id="calWeek" class="cal-week"></div>
       <div id="cal" class="cal"></div>
@@ -381,23 +429,33 @@
     </section>
 
     <section id="dayEditor">
-      <div class="day-nav"><button type="button" class="btn small" id="calPrevDay" aria-label="Previous day">‹</button><h2 id="calDate"></h2><button type="button" class="btn small" id="calNextDay" aria-label="Next day">›</button></div>
-      <div id="calTacho" class="note-tacho small"></div>
-      <div class="grid2">
-        <div class="f"><span class="lbl">Start place</span><div class="inp-row"><input id="calStart" placeholder="e.g. Scorrier"><button type="button" class="btn small loc" id="calStartLoc" title="Use my location">📍</button></div></div>
-        <div class="f"><span class="lbl">Finish place</span><div class="inp-row"><input id="calFinish" placeholder="e.g. Kepak Merthyr"><button type="button" class="btn small loc" id="calFinishLoc" title="Use my location">📍</button></div></div>
+      <div class="day-nav">
+        <button type="button" class="icon-btn" id="calPrevDay" aria-label="Previous day">‹</button>
+        <div class="day-title"><h2 id="calDate"></h2><span id="calBadge" class="badge"></span></div>
+        <button type="button" class="icon-btn" id="calNextDay" aria-label="Next day">›</button>
       </div>
-      <h3 class="sub-h">Drops, pickups, coupling</h3>
-      <div id="calStops"></div>
-      <div class="small muted" style="margin-top:8px">Tap to add one you've used before · hold to rename, remove or star it:</div>
-      <div id="calChips" class="chips"></div>
-      <div id="calTimeline"></div>
-      <h3 class="sub-h">Expenses this day <span class="muted small">(parking, tolls, food… add a photo of the receipt)</span></h3>
-      <div id="calExp"></div>
-      <div class="actions" style="margin-top:12px">
-        <button class="btn small" id="calCopyTacho">Copy tacho places into diary</button>
+      <div id="calTacho" class="note-tacho"></div>
+      <div class="ed-block">
+        <h3 class="ed-h">📍 Places</h3>
+        <div class="grid2">
+          <div class="f"><span class="lbl">Start place</span><div class="inp-row"><input id="calStart" placeholder="e.g. Scorrier"><button type="button" class="btn small loc" id="calStartLoc" title="Use my location">📍</button></div></div>
+          <div class="f"><span class="lbl">Finish place</span><div class="inp-row"><input id="calFinish" placeholder="e.g. Kepak Merthyr"><button type="button" class="btn small loc" id="calFinishLoc" title="Use my location">📍</button></div></div>
+        </div>
+      </div>
+      <div class="ed-block">
+        <h3 class="ed-h">🚚 Drops, pickups &amp; coupling</h3>
+        <div id="calStops"></div>
+        <div class="small muted hint">Tap a name you've used before · hold it to rename, remove or star it</div>
+        <div id="calChips" class="chips"></div>
+      </div>
+      <div class="ed-block">
+        <h3 class="ed-h">💷 Expenses <span class="muted small">parking, tolls, food… snap the receipt</span></h3>
+        <div id="calExp"></div>
+      </div>
+      <div class="actions ed-foot">
+        <button class="btn small" id="calCopyTacho">Copy tacho places</button>
         <button class="btn small" id="calClear">Clear this day</button>
-        <button class="btn small primary" id="calOpenWeek">Open this week's timesheet</button>
+        <button class="btn small primary" id="calOpenWeek" style="margin-left:auto">Open this week's timesheet →</button>
       </div>
     </section>
   </div>
@@ -503,7 +561,6 @@
 <script src="form.js"></script>
 <script src="places.js"></script>
 <script src="scan.js"></script>
-<script src="timeline.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
