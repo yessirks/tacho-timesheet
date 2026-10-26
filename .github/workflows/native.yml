@@ -1,0 +1,56 @@
+# Builds the native Tuki app (Flutter, in native/) and publishes it as the "tuki-native-latest" release:
+# https://github.com/yessirks/tacho-timesheet/releases/download/tuki-native-latest/Tuki-native.apk
+# It has its own app id (io.github.yessirks.tuki), so it installs next to the web-app version.
+name: Build Tuki native APK
+on:
+  push:
+    branches: [main]
+    paths: ['native/**', '.github/workflows/native.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.8'
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.TRUKIA_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/trukia.p12"
+          else echo "::error::Signing key secret missing."; exit 1; fi
+      - name: Build APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.TRUKIA_KEYSTORE_PASSWORD }}
+        run: |
+          export KEYSTORE_FILE="$RUNNER_TEMP/trukia.p12"
+          flutter build apk --release --build-name 2.0.${{ github.run_number }} --build-number ${{ github.run_number }}
+          cp build/app/outputs/flutter-apk/app-release.apk ../Tuki-native.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tuki-native-apk
+          path: Tuki-native.apk
+      - name: Publish release
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete tuki-native-latest --yes --cleanup-tag || true
+          gh release create tuki-native-latest Tuki-native.apk --title "Tuki native 2.0.${{ github.run_number }}" --latest=false \
+            --notes "The native Tuki app (Flutter). It installs next to the web-app Tuki. To move your data: in the old Tuki open Me › Export, then in the new one Me › Backup › Restore / import."
