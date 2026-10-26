@@ -54,12 +54,6 @@ class _MapTabState extends State<MapTab> {
   bool fitted = false, showStars = true, showDrops = true, showAreas = true;
   String get style => (store.profile['mapStyle'] as String?) ?? 'Map';
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _fit());
-  }
-
   void _fit() {
     if (fitted) return;
     final pts = [...store.stars, ...store.places].where(hasLL).map((p) => LatLng(numOf(p['lat']), numOf(p['lon']))).toList();
@@ -171,7 +165,8 @@ class _MapTabState extends State<MapTab> {
         return Stack(children: [
           FlutterMap(
             mapController: map,
-            options: const MapOptions(initialCenter: LatLng(52.4, -2.5), initialZoom: 6, interactionOptions: InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate)),
+            options: MapOptions(initialCenter: const LatLng(52.4, -2.5), initialZoom: 6, onMapReady: _fit,
+                interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate)),
             children: [
               ...tilesFor(style),
               if (showAreas)

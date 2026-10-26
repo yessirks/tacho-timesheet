@@ -1,17 +1,18 @@
-# tuki
+# Tuki (native)
 
-Tuki: driver diary, places and timesheets
+The native Android version of Tuki, built with Flutter. Same features and the same data format as the
+web app in the folder above, so a backup from the web app imports straight in (Me › Backup › Restore).
 
-## Getting Started
+- `lib/core/` is pure Dart: the tacho card parser, the week logic, the timesheet PDF, link parsing,
+  receipt reading. These are line-by-line ports of `tacho.js`, `week.js`, `form.js`, `places.js` and
+  `scan.js`, checked against them: same results on a real card, and pixel-identical PDF pages.
+- `lib/data/` keeps your data (a JSON file plus receipt files in the app's own folder) and builds the PDF.
+- `lib/ui/` holds the four tabs: Map, Diary, Timesheet and Me.
 
-This project is a starting point for a Flutter application.
+Receipts use Google's on-device document scanner and text recognition (no internet needed).
 
-A few resources to get you started if this is your first Flutter project:
+GitHub Actions builds and signs the APK on every push to `native/` and publishes it as the
+`tuki-native-latest` release. Its app id is `io.github.yessirks.tuki`, so it installs next to the web-app Tuki.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Checks: `flutter analyze` and `flutter test`. To compare with the web engine on a card file, set
+`TUKI_CARD` and `TUKI_OUT` and run `test/engine_compare_test.dart`.
