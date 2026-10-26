@@ -1,0 +1,55 @@
+# Builds the Trukia Android app (APK) and publishes it as the "trukia-latest" release:
+# https://github.com/yessirks/tacho-timesheet/releases/download/trukia-latest/Trukia.apk
+# Without the signing-key secrets it still compiles (to check the project) but publishes nothing.
+name: Build Trukia APK
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.TRUKIA_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/trukia.p12"
+          else echo "::warning::Signing key missing: run add-key-to-github.ps1 from the Trukia-signing-key folder. Building unsigned to check the project."; fi
+      - name: Build APK
+        working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.TRUKIA_KEYSTORE_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
+        run: |
+          if [ -f "$RUNNER_TEMP/trukia.p12" ]; then export KEYSTORE_FILE="$RUNNER_TEMP/trukia.p12"; fi
+          gradle assembleRelease --no-daemon --stacktrace
+          ls -la app/build/outputs/apk/release/
+      - name: Stop if unsigned
+        run: |
+          if [ ! -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            echo "::error::The app built fine but isn't signed, so nothing was published. Add the signing key (add-key-to-github.ps1) and run this workflow again."; exit 1; fi
+          cp android/app/build/outputs/apk/release/app-release.apk Trukia.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Trukia-apk
+          path: Trukia.apk
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete trukia-latest --yes --cleanup-tag || true
+          gh release create trukia-latest Trukia.apk --title "Trukia 1.0.${{ github.run_number }}" --latest \
+            --notes "Trukia for Android. On your phone, download Trukia.apk and open it to install (allow installing from your browser if asked). The app updates itself with the website; you only need a new APK when this page says so."

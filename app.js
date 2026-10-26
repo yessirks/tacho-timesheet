@@ -1,4 +1,4 @@
-/* Tacho Timesheet: UI glue. Data flow: .ddd → Tacho.parse → Week.computeWeek → (auto values + your edits) → TimesheetPDF.build */
+/* Trukia: UI glue. Data flow: .ddd → Tacho.parse → Week.computeWeek → (auto values + your edits) → TimesheetPDF.build */
 (function () {
   'use strict';
   const $ = (s, el = document) => el.querySelector(s);
@@ -1132,6 +1132,7 @@
     });
   }
   function renderStarList() {
+    const cnt = $('#starCount'); if (cnt) cnt.textContent = stars.length ? `(${stars.length})` : '';
     const q = ($('#starSearch').value || '').toLowerCase();
     const list = stars.filter((s) => !q || (s.name + ' ' + s.note).toLowerCase().includes(q))
       .map((s) => ({ s, d: lastPos ? Geo.distM(lastPos, s) : null }))
@@ -1148,30 +1149,71 @@
       $('[data-show]', el).onclick = () => { if (map) { map.setView([s.lat, s.lon], 17); $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' }); } };
     });
   }
+  let mapLayers = null;
   async function renderMap() {
     try { await loadLeaflet(); } catch { $('#map').innerHTML = '<p class="small muted" style="padding:12px">The map needs an internet connection.</p>'; return; }
     if (!map) {
       map = L.map('map', { zoomControl: true }).setView([52.4, -2.5], 6);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
-      mapLayer = L.layerGroup().addTo(map);
-      const pts = [...stars, ...places].map((p) => [p.lat, p.lon]);
-      if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 14 });
+      const street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+      const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri' });
+      mapLayers = { areas: L.layerGroup().addTo(map), drops: L.layerGroup().addTo(map), stars: L.layerGroup().addTo(map), me: L.layerGroup().addTo(map) };
+      L.control.layers({ Map: street, Satellite: sat }, { '⭐ Starred': mapLayers.stars, '🚚 My drops': mapLayers.drops, '◯ Saved areas': mapLayers.areas }, { position: 'topright' }).addTo(map);
+      const Locate = L.Control.extend({
+        options: { position: 'topleft' },
+        onAdd() {
+          const b = L.DomUtil.create('button', 'map-btn');
+          b.type = 'button'; b.title = 'Where am I?'; b.textContent = '📍';
+          L.DomEvent.disableClickPropagation(b);
+          b.onclick = locateOnMap;
+          return b;
+        },
+      });
+      new Locate().addTo(map);
+      // Fit to your places once the page has laid out (measuring too early zooms in the wrong place).
+      setTimeout(() => {
+        map.invalidateSize();
+        const pts = [...stars, ...places].map((p) => [p.lat, p.lon]);
+        if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 14 });
+      }, 150);
     }
     setTimeout(() => map.invalidateSize(), 50);
-    mapLayer.clearLayers();
+    Object.values(mapLayers).forEach((g) => g.clearLayers());
     for (const p of places) {
-      L.circle([p.lat, p.lon], { radius: p.radius || 500, color: p.base ? '#1d7a46' : '#1f4fbf', weight: 1.5, fillOpacity: 0.12 })
-        .bindTooltip(p.name || (p.base ? 'Base' : 'Saved place')).addTo(mapLayer);
+      L.circle([p.lat, p.lon], { radius: p.radius || 500, color: p.base ? '#1d7a46' : '#1f4fbf', weight: 1.5, fillOpacity: 0.1 })
+        .bindTooltip(p.name || (p.base ? 'Base' : 'Saved place')).addTo(mapLayers.areas);
     }
-    for (const s of stars) {
-      const m = L.marker([s.lat, s.lon], { icon: L.divIcon({ className: 'star-pin', html: '⭐', iconSize: [26, 26], iconAnchor: [13, 13] }) });
+    // every drop / pickup in the diary that has a location
+    for (const [date, e] of Object.entries(diary)) for (const st of e.stops || []) {
+      if (!isFinite(st.lat)) continue;
       const box = document.createElement('div');
-      box.innerHTML = `<b>${esc(s.name)}</b>${s.note ? `<div>${esc(s.note)}</div>` : ''}<div class="actions" style="margin-top:6px">${navButtons(s)}<button type="button" class="btn small" data-edit>Edit</button></div>`;
-      bindCopy(box);
-      $('[data-edit]', box).onclick = () => starEditor(s);
-      m.bindPopup(box).addTo(mapLayer);
+      box.innerHTML = `<b>${esc(STOP_TYPES[st.type] || 'Stop')} · ${esc(st.name || '')}${st.ref ? ` (${esc(st.ref)})` : ''}</b><div class="small">${DAYS[dayIdx(date)]} ${fmtDay(date)} ${date.slice(0, 4)}</div>
+        <div class="actions" style="margin-top:6px"><button type="button" class="btn small" data-star>⭐ Star this spot</button><button type="button" class="btn small" data-day>Open day</button></div>`;
+      $('[data-star]', box).onclick = () => starEditor({ name: st.name || '', lat: st.lat, lon: st.lon });
+      $('[data-day]', box).onclick = () => { showTab('diary'); selectCalDay(date); };
+      L.circleMarker([st.lat, st.lon], { radius: 6, color: '#fff', weight: 1.5, fillColor: st.type === 'drop' ? '#e8890c' : '#7c3aed', fillOpacity: 1 })
+        .bindTooltip(`${st.name || STOP_TYPES[st.type]} · ${fmtDay(date)}`).bindPopup(box).addTo(mapLayers.drops);
     }
-    if (lastPos) L.circleMarker([lastPos.lat, lastPos.lon], { radius: 7, color: '#fff', weight: 2, fillColor: '#1f4fbf', fillOpacity: 1 }).bindTooltip('You').addTo(mapLayer);
+    for (const st of stars) {
+      const m = L.marker([st.lat, st.lon], { icon: L.divIcon({ className: 'star-pin', html: '⭐', iconSize: [26, 26], iconAnchor: [13, 13] }) });
+      const box = document.createElement('div');
+      box.innerHTML = `<b>${esc(st.name)}</b>${st.note ? `<div>${esc(st.note)}</div>` : ''}<div class="actions" style="margin-top:6px">${navButtons(st)}<button type="button" class="btn small" data-edit>Edit</button></div>`;
+      bindCopy(box);
+      $('[data-edit]', box).onclick = () => starEditor(st);
+      m.bindPopup(box).addTo(mapLayers.stars);
+    }
+    if (lastPos) {
+      if (lastPos.acc) L.circle([lastPos.lat, lastPos.lon], { radius: lastPos.acc, color: '#1f4fbf', weight: 1, fillOpacity: 0.08, interactive: false }).addTo(mapLayers.me);
+      L.circleMarker([lastPos.lat, lastPos.lon], { radius: 8, color: '#fff', weight: 3, fillColor: '#1f4fbf', fillOpacity: 1 }).bindTooltip('You are here').addTo(mapLayers.me);
+    }
+  }
+  async function locateOnMap() {
+    try {
+      const p = await Geo.here();
+      lastPos = p;
+      await renderMap();
+      map.setView([p.lat, p.lon], Math.max(map.getZoom(), 16));
+      renderStarList();   // nearest starred places first
+    } catch (e) { alert(e.message); }
   }
   function renderPlacesTab() { renderStarList(); renderMap(); renderPlaces(); }
   function setupPlaces() {
@@ -1403,7 +1445,7 @@
 
   // ---- tabs -------------------------------------------------------------------------------------
   function showTab(t) {
-    if (!['sheet', 'diary', 'places', 'me'].includes(t)) t = 'sheet';
+    if (!['sheet', 'diary', 'places', 'me'].includes(t)) t = 'places';
     $$('main.tab').forEach((m) => m.classList.toggle('on', m.id === 'tab-' + t));
     $$('nav.tabs [data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
     ['sheet', 'diary', 'places', 'me'].forEach((x) => document.body.classList.toggle('tab-' + x, x === t));
@@ -1418,8 +1460,7 @@
     $$('nav.tabs [data-tab]').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
     $$('a.tablink').forEach((a) => a.onclick = (e) => { e.preventDefault(); showTab(a.getAttribute('href').slice(1)); });
     window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
-    let saved = 'sheet'; try { saved = localStorage.getItem('tt.tab') || 'sheet'; } catch { /* ignore */ }
-    showTab(location.hash.slice(1) || saved);
+    showTab(location.hash.slice(1) || 'places');   // Trukia always opens on the map
   }
 
   // ---- storage: keep it, back it up --------------------------------------------------------------
@@ -1439,7 +1480,7 @@
     const weeks = {};
     for (const [k, v] of await idb.entries()) if (String(k).startsWith('week:')) weeks[k] = stripPhotos(v);
     const data = { app: 'tacho-timesheet', version: 4, exported: new Date().toISOString(), profile, places, stars, diary, geo, weeks };
-    download(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }), `tacho-timesheet-data-${todayKey()}.json`);
+    download(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }), `trukia-data-${todayKey()}.json`);
   }
   async function importAll(file) {
     const j = JSON.parse(await file.text());
@@ -1474,7 +1515,7 @@
   const DEFAULT_EMAIL = 'Hello,\n\nPlease find attached my timesheet for the week commencing {weekCommencing} (vehicle {vehicle}).\n\n' +
     'Days worked: {days}. Nights out: {nights}. Expenses: £{expenses}.\n\nKind regards,\n{name}';
   const DEFAULT_SUBJECT = 'Weekly Timesheet - {cardName}({wc})';
-  // "TANCAU CIPRIAN-IOSIF" -> "Tancau Ciprian-Iosif"
+  // "SMITH JOHN-PAUL" -> "Smith John-Paul"
   const titleCase = (t) => String(t || '').toLowerCase().replace(/(^|[\s'’-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
   const ddmm = (key) => fmtShort(key).slice(0, 5);
   function emailVals() {

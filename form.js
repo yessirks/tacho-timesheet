@@ -355,7 +355,7 @@
   async function build(data, opts = {}) {
     const doc = await PDFDocument.create();
     doc.setTitle('Weekly Timesheet' + (data.p1 && data.p1.weekCommencing ? ' - w/c ' + data.p1.weekCommencing : ''));
-    doc.setCreator('Tacho Timesheet');
+    doc.setCreator('Trukia');
     const fonts = {
       reg: await doc.embedFont(StandardFonts.Helvetica),
       bold: await doc.embedFont(StandardFonts.HelveticaBold),

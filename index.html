@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Tacho Timesheet</title>
+<title>Trukia</title>
+<meta name="description" content="Trukia: save exact drop locations, navigate, keep a driving diary and fill your weekly timesheet from the tacho.">
+<meta name="apple-mobile-web-app-title" content="Trukia">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -330,17 +332,26 @@
     .ed-foot .btn { flex: 1 1 auto; }
     .ed-foot #calOpenWeek { margin-left: 0 !important; flex-basis: 100%; }
   }
+
+  /* Trukia map */
+  #map { height: 460px; }
+  .map-btn { width: 34px; height: 34px; border: 2px solid rgba(0,0,0,.2); border-radius: 6px; background: #fff; font-size: 17px; line-height: 1; cursor: pointer; background-clip: padding-box; }
+  .map-btn:hover { background: #f4f4f4; }
+  .leaflet-control-layers { border-radius: 8px !important; }
+  .leaflet-control-layers-list { font: 13px/1.5 system-ui, sans-serif; }
+  .map-actions { margin-bottom: 2px; }
+  @media (max-width: 700px) { #map { height: 56vh; min-height: 300px; } .map-actions .btn { flex: 1 1 auto; } }
 </style>
 </head>
 <body>
 <header>
-  <div class="brand"><img src="icons/icon-192.png" alt=""><h1>Tacho Timesheet</h1></div>
+  <div class="brand"><img src="icons/icon-192.png" alt=""><h1>Trukia</h1></div>
   <div class="card-info" id="cardInfo">No card file loaded</div>
   <label class="btn load-btn"><span class="ic">📂</span><span class="lb">Load .ddd file</span><input type="file" id="fileInput" hidden></label>
   <nav class="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="sheet"><span class="ic">📄</span><span class="lb">Timesheet</span></button>
+    <button type="button" role="tab" data-tab="places"><span class="ic">🗺</span><span class="lb">Map</span></button>
     <button type="button" role="tab" data-tab="diary"><span class="ic">📅</span><span class="lb">Diary</span></button>
-    <button type="button" role="tab" data-tab="places"><span class="ic">⭐</span><span class="lb">Places</span></button>
+    <button type="button" role="tab" data-tab="sheet"><span class="ic">📄</span><span class="lb">Timesheet</span></button>
     <button type="button" role="tab" data-tab="me"><span class="ic">👤</span><span class="lb">Me</span></button>
   </nav>
 </header>
@@ -468,15 +479,16 @@
 <main class="tab single" id="tab-places">
   <div>
     <section>
-      <h2>Starred places <span class="sub">Exact spots, like the gate of a drop. One tap opens Google Maps, Waze or TomTom.</span></h2>
-      <div class="actions">
+      <h2>🗺 Map <span class="sub">Save exact spots, like the gate of a drop, and open them in Google Maps, Waze or TomTom.</span></h2>
+      <div class="actions map-actions">
         <button type="button" class="btn primary" id="starPaste">＋ Add place</button>
         <button type="button" class="btn" id="starHere">📍 Star where I am</button>
         <button type="button" class="btn" id="starPick">🛰 Pick on map</button>
         <button type="button" class="btn small link" id="starBulk">Paste several…</button>
       </div>
       <div id="map"></div>
-      <input id="starSearch" placeholder="Search starred places…" style="margin-top:10px">
+      <h3 class="ed-h" style="margin-top:16px">⭐ Starred places <span class="muted" id="starCount"></span></h3>
+      <input id="starSearch" type="search" placeholder="Search starred places…">
       <div id="starList"></div>
       <div class="actions" style="margin-top:12px">
         <button type="button" class="btn small" id="starGpx">Export GPX (TomTom, Garmin)</button>
@@ -535,7 +547,7 @@
       <h2 style="margin-top:16px">Email to the office</h2>
       <label class="f">Subject<input id="emailSubjTpl" placeholder="Weekly Timesheet - {cardName}({wc})"></label>
       <label class="f" style="margin-top:10px">Message<textarea id="emailTpl" rows="8"></textarea></label>
-      <p class="small muted">Fill-ins: {cardName} (e.g. Tancau Ciprian Iosif) {name} {firstName} {wc} (week start, 18/10) {we} (week end, 24/10) {weekCommencing} {weekEnding} {vehicle} {days} {nights} {expenses} {daysList} {file}</p>
+      <p class="small muted">Fill-ins: {cardName} (your name from the card, e.g. Smith John) {name} {firstName} {wc} (week start, 18/10) {we} (week end, 24/10) {weekCommencing} {weekEnding} {vehicle} {days} {nights} {expenses} {daysList} {file}</p>
       <button class="btn small" id="emailReset">Back to default wording</button>
       <button class="btn small hidden" id="unhideStops"></button>
     </section>
@@ -556,7 +568,7 @@
 
 <datalist id="placeNames"></datalist>
 <div id="toast" role="status" aria-live="polite"></div>
-<footer>Everything stays on this device. Place names © OpenStreetMap contributors (Nominatim). Times are UK local time.</footer>
+<footer>Trukia · everything stays on this device. Place names © OpenStreetMap contributors (Nominatim). Times are UK local time.</footer>
 
 <script src="lib/pdf-lib.min.js"></script>
 <script src="logo.js"></script>

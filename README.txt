@@ -1,13 +1,13 @@
-TACHO TIMESHEET
-===============
+TRUKIA
+======
 
 Online (PC or phone): https://yessirks.github.io/tacho-timesheet/
 
 Or double-click index.html (opens in Chrome / Edge). Nothing is uploaded: the .ddd file,
 your details and photos stay in this browser on this device.
 
-Three tabs
-----------
+Tabs (opens on the Map)
+-----------------------
 Timesheet   pick the week, check the days, add expenses/receipts, download or share the PDF,
             copy the email to the office.
 Diary       a calendar. Write each day's start place, finish place, and a list of
@@ -41,7 +41,7 @@ Weekly use
    The badge next to the button shows "✓ Downloaded <date>" (orange if you changed the week
    after downloading), and sent weeks get a ✓ in the week list.
    Food goes in the form's "Market expenses" column (the form has no food column).
-5. Copy the subject (e.g. "Weekly Timesheet - Tancau Ciprian Iosif(18/10)") and the email,
+5. Copy the subject (e.g. "Weekly Timesheet - Smith John(18/10)") and the email,
    paste them into your email to the office, attach the PDF. Change both in Me > Presets.
 
 First time only
@@ -59,8 +59,15 @@ in the PDFs). "Restore from a .json file" loads it back, e.g. on your phone or a
 Restoring merges: it never deletes what's already on the device.
 On iPhone, add the app to the Home Screen, otherwise Safari may clear it after a few weeks unused.
 
-On your phone
--------------
+Android app (APK)
+-----------------
+Download https://github.com/yessirks/tacho-timesheet/releases/download/trukia-latest/Trukia.apk
+on the phone and open it to install. It's the same app, full-screen, and updates itself with the
+website. Built by .github/workflows/android.yml; the signing key lives in Desktop\Trukia-signing-key
+(keep it safe: updates must be signed with the same key).
+
+On your phone (without the APK)
+-------------------------------
 Open the link in Chrome (Android) or Safari (iPhone), then "Install app" / "Add to Home Screen".
 It then works offline like an app. Get the .ddd onto the phone (card reader app, email, Drive…),
 tap "Load .ddd file", and use "Share" to send the PDF and the email text to the office.

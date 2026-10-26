@@ -1,0 +1,8 @@
+<resources>
+    <string name="appName">Trukia</string>
+    <string name="launcherName">Trukia</string>
+    <string name="launchUrl">https://yessirks.github.io/tacho-timesheet/index.html</string>
+    <string name="hostName">yessirks.github.io</string>
+    <string name="providerAuthority">io.github.yessirks.trukia.fileprovider</string>
+    <string name="assetStatements">[{ \"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": { \"namespace\": \"web\", \"site\": \"https://yessirks.github.io\" } }]</string>
+</resources>
