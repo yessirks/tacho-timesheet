@@ -518,6 +518,7 @@
     cv.onpointermove = (e) => { if (!drawing) return; const p = pt(e); cx.beginPath(); cx.moveTo(last.x, last.y); cx.lineTo(p.x, p.y); cx.stroke(); last = p; };
     cv.onpointerup = cv.onpointercancel = () => { drawing = false; };
     $('#sigClear').onclick = () => cx.clearRect(0, 0, cv.width, cv.height);
+    $('#sigMake').onclick = signatureStyles;
     $('#sigSave').onclick = () => { const u = trimCanvas(cv); if (!u) return alert('Sign in the box first.'); profile.signature = u; LS.set('profile', profile); showSig(); schedulePdf(); };
     $('#sigRemove').onclick = () => { delete profile.signature; LS.set('profile', profile); showSig(); schedulePdf(); };
     $('#sigUpload').onchange = async (ev) => {
@@ -535,6 +536,65 @@
       profile.signature = trimCanvas(t); LS.set('profile', profile); showSig(); schedulePdf();
     };
     showSig();
+  }
+  // ✨ Signature styles: your name in a few handwriting fonts, drawn in blue ink.
+  const SIG_FONTS = [['Great Vibes', 70], ['Allura', 72], ['Mr Dafoe', 66], ['Sacramento', 72], ['Dancing Script', 58, 600], ['Homemade Apple', 46]];
+  async function loadSigFonts() {
+    if (!document.getElementById('sigFonts')) {
+      const l = document.createElement('link');
+      l.id = 'sigFonts'; l.rel = 'stylesheet';
+      l.href = 'https://fonts.googleapis.com/css2?family=Allura&family=Dancing+Script:wght@600&family=Great+Vibes&family=Homemade+Apple&family=Mr+Dafoe&family=Sacramento&display=swap';
+      // the font list must arrive before the fonts can be asked for
+      await new Promise((res) => { l.onload = l.onerror = res; setTimeout(res, 5000); document.head.appendChild(l); });
+    }
+    await Promise.all(SIG_FONTS.map(([f, sz, w]) => document.fonts.load(`${w || 400} ${sz}px "${f}"`).catch(() => null)));
+  }
+  function drawSig(text, [font, size, weight], flourish) {
+    const c = document.createElement('canvas'); c.width = 1000; c.height = 320;
+    const x = c.getContext('2d');
+    x.translate(50, 205); x.rotate(-0.06);
+    x.fillStyle = x.strokeStyle = '#0f2a80';
+    let sz = size * 2;
+    const set = () => { x.font = `${weight || 400} ${sz}px "${font}", cursive`; };
+    set(); while (x.measureText(text).width > 860 && sz > 36) { sz -= 4; set(); }
+    x.fillText(text, 0, 0);
+    if (flourish) {
+      const w = x.measureText(text).width;
+      x.lineWidth = Math.max(3, sz / 28); x.lineCap = 'round';
+      x.beginPath(); x.moveTo(-14, sz * 0.32); x.bezierCurveTo(w * 0.3, sz * 0.55, w * 0.65, sz * 0.12, w + 40, sz * 0.26); x.stroke();
+    }
+    return c;
+  }
+  async function signatureStyles() {
+    const id = card && card.identification;
+    const sur = titleCase(id ? id.surname : (profile.name || '').split(' ')[0] || '');
+    const first = titleCase(id ? id.firstNames.split(' ')[0] : (profile.name || '').split(' ')[1] || '');
+    const variants = [...new Set([first && sur ? `${first[0]}. ${sur}` : '', sur, first && sur ? `${first} ${sur}` : '', first && sur ? `${first[0]}${sur[0]}` : ''].filter(Boolean))];
+    const sh = sheet(`<h3>✨ Make my signature</h3>
+      <div class="inp-row"><input data-g="text" value="${esc(variants[0] || '')}" placeholder="Your name"><label class="check small" style="white-space:nowrap"><input type="checkbox" data-g="fl" checked> Underline</label></div>
+      <div class="chips" style="margin-top:6px">${variants.map((v) => `<button type="button" class="chip" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>
+      <p class="small muted" data-g="st">Loading handwriting styles…</p>
+      <div class="sig-grid" data-g="grid"></div>
+      <div class="actions sheet-foot"><button type="button" class="btn small" data-close>Cancel</button></div>`);
+    sh.classList.add('wide');
+    await loadSigFonts();
+    const grid = $('[data-g=grid]', sh), txt = $('[data-g=text]', sh), fl = $('[data-g=fl]', sh);
+    const draw = () => {
+      const t = txt.value.trim();
+      $('[data-g=st]', sh).textContent = t ? 'Tap the one you like:' : 'Type your name above.';
+      grid.innerHTML = '';
+      if (!t) return;
+      SIG_FONTS.forEach((f) => {
+        const c = drawSig(t, f, fl.checked), b = document.createElement('button');
+        b.type = 'button'; b.className = 'sig-opt'; b.title = f[0];
+        b.innerHTML = `<img alt="${esc(f[0])}" src="${c.toDataURL('image/png')}">`;
+        b.onclick = () => { profile.signature = trimCanvas(c); LS.set('profile', profile); showSig(); schedulePdf(); sh.close(); toast('✓ Signature saved'); };
+        grid.appendChild(b);
+      });
+    };
+    txt.oninput = draw; fl.onchange = draw;
+    $$('[data-v]', sh).forEach((c) => c.onclick = () => { txt.value = c.dataset.v; draw(); });
+    draw();
   }
   function showSig() {
     const has = !!profile.signature;
@@ -612,8 +672,46 @@
   function fmtStop(s) {
     const name = (s.name || '').trim(), ref = (s.ref || '').trim();
     if (!name && !ref) return '';
+    if ((s.type === 'couple' || s.type === 'uncouple') && ref) return `${STOP_TYPES[s.type]} ${ref}${name ? ' @ ' + name : ''}`;
     const what = name && ref ? `${name} (${ref})` : name || ref;
     return (s.type === 'drop' && profile.dropWord !== 'yes') || s.type === 'other' ? what : `${STOP_TYPES[s.type] || ''} ${what}`;
+  }
+  // Which trailer is on at a point in the diary: "Couple 123" sets it, "Uncouple" clears it (carries across days).
+  function trailerBefore(date, idx) {
+    let cur = null;
+    const from = Week.addDays(date, -45);
+    for (const d of Object.keys(diary).filter((k) => k >= from && k <= date).sort()) {
+      const list = diary[d].stops || [], end = d === date ? idx : list.length;
+      for (let i = 0; i < end; i++) {
+        const x = list[i], ref = (x.ref || '').trim();
+        if (x.type === 'couple' && ref) cur = { ref, date: d, at: (x.name || '').trim() };
+        else if (x.type === 'uncouple') cur = null;
+      }
+    }
+    return cur;
+  }
+  function redrawStopEditors(date) {
+    for (const ed of [...stopEditors]) {
+      if (!document.body.contains(ed.box)) { stopEditors.delete(ed); continue; }
+      if (ed.date >= date && !ed.box.contains(document.activeElement)) ed.draw();
+    }
+  }
+  // ↻ Same as another day: copy a regular run.
+  function copyDayPicker(date) {
+    const has = (d) => (diary[d].stops || []).some((x) => (x.name || x.ref || '').trim());
+    const days = Object.keys(diary).filter((d) => d !== date && has(d)).sort().reverse().slice(0, 14);
+    if (!days.length) return toast('No other days with drops yet');
+    const sh = sheet(`<h3>↻ Same as another day</h3>
+      <p class="small muted">Copies that day's drops, pickups and coupling to ${DAYS[dayIdx(date)]} ${fmtDay(date)}. You can change them after.</p>
+      <div class="pick-list">${days.map((d) => `<button type="button" class="pick" data-d="${d}"><span><b>${DAYS[dayIdx(d)].slice(0, 3)} ${fmtDay(d)}</b><br><small class="muted">${esc(fmtStops(diary[d].stops).slice(0, 110))}</small></span></button>`).join('')}</div>
+      <div class="actions sheet-foot"><button type="button" class="btn small" data-close>Cancel</button></div>`);
+    $$('[data-d]', sh).forEach((b) => b.onclick = () => {
+      const src = diary[b.dataset.d].stops.filter((x) => (x.name || x.ref || '').trim()).map((x) => ({ ...x }));
+      const cur = (dget(date).stops || []).filter((x) => (x.name || x.ref || '').trim());
+      setDiary(date, 'stops', [...cur, ...src]);
+      sh.close(); redrawStopEditors(date); if (calMonth) renderCal();
+      toast(`Copied ${src.length} from ${fmtDay(b.dataset.d)}`);
+    });
   }
   const fmtStops = (list) => (list || []).map(fmtStop).filter(Boolean).join(', ');
   const gpsStops = (r) => r.drops.map((d) => ({ type: d.op === 1 ? 'pickup' : 'drop', name: label(d.pos) || '…' }));
@@ -623,23 +721,31 @@
     const list = () => (dget(date).stops || []).map((s) => ({ ...s }));
     const save = (l, redraw) => { setDiary(date, 'stops', l); if (redraw) draw(); syncStopEditors(ed); };
     function draw() {
-      const l = list();
-      box.innerHTML = (l.length ? '' : '<p class="small muted empty">Nothing added yet.</p>') + `<div class="stops">${l.map((s, n) => `<div class="stop" data-n="${n}">
+      const l = list(), endT = trailerBefore(date, l.length);
+      let drops = 0;
+      const badge = (s) => s.type === 'drop' ? `<span class="stop-no" title="Drop ${++drops}">${drops}</span>`
+        : `<span class="stop-no ic" title="${STOP_TYPES[s.type] || ''}">${{ pickup: '⬆', couple: '🔗', uncouple: '✂', other: '•' }[s.type] || '•'}</span>`;
+      const refHint = (s, n) => { if (s.type === 'couple') return 'Trailer no.'; const t = trailerBefore(date, n); return t ? `🚛 ${t.ref}` : 'Trailer / ref'; };
+      box.innerHTML = (endT ? `<div class="trailer-on">🚛 Trailer <b>${esc(endT.ref)}</b> coupled${endT.date !== date ? ` since ${DAYS[dayIdx(endT.date)].slice(0, 3)} ${fmtDay(endT.date)}` : ''}${endT.at ? ` at ${esc(endT.at)}` : ''}
+          <button type="button" class="btn small" data-uncouple>✂ Uncouple ${esc(endT.ref)}</button></div>` : '')
+        + (l.length ? '' : '<p class="small muted empty">Nothing added yet.</p>') + `<div class="stops">${l.map((s, n) => `<div class="stop" data-n="${n}">${badge(s)}
           <select data-s="type" aria-label="Type">${Object.entries(STOP_TYPES).map(([k, v]) => `<option value="${k}" ${s.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
           <input data-s="name" value="${esc(s.name)}" placeholder="Name, e.g. Sainsbury's Paignton" aria-label="Name">
-          <input data-s="ref" value="${esc(s.ref || '')}" placeholder="Trailer / ref" aria-label="Trailer or reference">
+          <input data-s="ref" value="${esc(s.ref || '')}" placeholder="${esc(refHint(s, n))}" aria-label="Trailer or reference">
           <button type="button" class="btn small loc${isFinite(s.lat) ? ' on' : ''}" data-s="loc" title="${isFinite(s.lat) ? 'Located. Tap to locate again' : 'Use my location'}">📍</button>
           <button type="button" class="btn small link" data-s="del" title="Remove">✕</button></div>`).join('')}</div>
-        <div class="add-row">${['drop', 'pickup', 'couple', 'uncouple'].map((t) => `<button type="button" class="btn small" data-add="${t}">+ ${STOP_TYPES[t]}</button>`).join('')}</div>`;
+        <div class="add-row">${['drop', 'pickup', 'couple', 'uncouple'].map((t) => `<button type="button" class="btn small" data-add="${t}">+ ${STOP_TYPES[t]}</button>`).join('')}
+          <button type="button" class="btn small link" data-same>↻ Same as another day</button></div>`;
       $$('.stop', box).forEach((row) => {
         const n = +row.dataset.n;
-        $('[data-s=type]', row).onchange = (e) => { const l2 = list(); l2[n].type = e.target.value; save(l2); };
+        $('[data-s=type]', row).onchange = (e) => { const l2 = list(); l2[n].type = e.target.value; save(l2, true); };
         $('[data-s=name]', row).oninput = (e) => { const l2 = list(); l2[n].name = e.target.value; save(l2); };
         $('[data-s=ref]', row).oninput = (e) => { const l2 = list(); l2[n].ref = e.target.value; save(l2); };
+        $('[data-s=ref]', row).onchange = () => redrawStopEditors(date);   // trailer changes show on the following drops
         typeahead($('[data-s=name]', row), (it) => {
           if (!isFinite(it.lat)) return;
           const l2 = list(); l2[n].lat = it.lat; l2[n].lon = it.lon; save(l2, true);
-        });
+        }, () => ({ prev: n > 0 ? (list()[n - 1].name || '') : (dget(date).start || '') }));
         $('[data-s=loc]', row).onclick = () => locatePicker(`📍 Where is this ${(STOP_TYPES[list()[n].type] || 'stop').toLowerCase()}?`, (name, pos) => {
           const l2 = list(); l2[n].name = name;
           if (pos) { l2[n].lat = pos.lat; l2[n].lon = pos.lon; }
@@ -648,9 +754,15 @@
         $('[data-s=del]', row).onclick = () => { const l2 = list(); l2.splice(n, 1); save(l2, true); };
       });
       $$('[data-add]', box).forEach((b) => b.onclick = () => {
-        const l2 = list(); l2.push({ type: b.dataset.add, name: '' }); save(l2, true);
-        const ins = $$('[data-s=name]', box); ins[ins.length - 1].focus();
+        const t = b.dataset.add, l2 = list();
+        l2.push({ type: t, name: '', ...(t === 'uncouple' && endT ? { ref: endT.ref } : {}) });
+        save(l2, true);
+        // coupling starts with the trailer number; everything else with the place
+        const ins = $$(t === 'couple' ? '[data-s=ref]' : '[data-s=name]', box); ins[ins.length - 1].focus();
       });
+      const un = $('[data-uncouple]', box);
+      if (un) un.onclick = () => { const l2 = list(); l2.push({ type: 'uncouple', name: '', ref: endT.ref }); save(l2, true); const ins = $$('[data-s=name]', box); ins[ins.length - 1].focus(); };
+      $('[data-same]', box).onclick = () => copyDayPicker(date);
     }
     ed.draw = draw;
     ed.add = (s) => { const l2 = list().filter((x) => (x.name || '').trim()); l2.push(s); save(l2, true); };
@@ -661,7 +773,7 @@
   function syncStopEditors(from) {
     for (const ed of [...stopEditors]) {
       if (!document.body.contains(ed.box)) { stopEditors.delete(ed); continue; }
-      if (ed !== from && ed.date === from.date && !ed.box.contains(document.activeElement)) ed.draw();
+      if (ed !== from && ed.date >= from.date && !ed.box.contains(document.activeElement)) ed.draw();
     }
   }
   // Stops you've used before, most used first, for one-tap entry.
@@ -1154,10 +1266,18 @@
     try { await loadLeaflet(); } catch { $('#map').innerHTML = '<p class="small muted" style="padding:12px">The map needs an internet connection.</p>'; return; }
     if (!map) {
       map = L.map('map', { zoomControl: true }).setView([52.4, -2.5], 6);
-      const street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
-      const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri' });
+      // Base maps: Clean (Esri streets, close to Google Maps), OpenStreetMap, satellite with and without road names.
+      const bases = {
+        Clean: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Map © Esri' }),
+        'Street map': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }),
+        'Satellite + roads': satLayer(true),
+        Satellite: satLayer(false),
+      };
+      let base = 'Clean'; try { base = localStorage.getItem('tt.mapBase') || 'Clean'; } catch { /* ignore */ }
+      (bases[base] || bases.Clean).addTo(map);
+      map.on('baselayerchange', (e) => { try { localStorage.setItem('tt.mapBase', e.name); } catch { /* ignore */ } });
       mapLayers = { areas: L.layerGroup().addTo(map), drops: L.layerGroup().addTo(map), stars: L.layerGroup().addTo(map), me: L.layerGroup().addTo(map) };
-      L.control.layers({ Map: street, Satellite: sat }, { '⭐ Starred': mapLayers.stars, '🚚 My drops': mapLayers.drops, '◯ Saved areas': mapLayers.areas }, { position: 'topright' }).addTo(map);
+      L.control.layers(bases, { '⭐ Starred': mapLayers.stars, '🚚 My drops': mapLayers.drops, '◯ Saved areas': mapLayers.areas }, { position: 'topright' }).addTo(map);
       const Locate = L.Control.extend({
         options: { position: 'topleft' },
         onAdd() {
@@ -1265,8 +1385,22 @@
   }
 
   // ---- type-ahead: starred spots, saved places and your diary, as you type -----------------------------
-  function placeSuggestions(q) {
+  // How often each place followed `prev` in your diary (your usual route).
+  function nextAfter(prev) {
+    const m = new Map(), p = (prev || '').trim().toLowerCase();
+    if (!p) {   // nothing before it yet: the drop you usually do first
+      for (const e of Object.values(diary)) { const f = ((e.stops || [])[0] || {}).name; if (f && f.trim()) { const k = f.trim().toLowerCase(); m.set(k, (m.get(k) || 0) + 1); } }
+      return m;
+    }
+    for (const e of Object.values(diary)) {
+      const l = [e.start, ...(e.stops || []).map((x) => x.name)].map((x) => (x || '').trim()).filter(Boolean);
+      for (let i = 0; i + 1 < l.length; i++) if (l[i].toLowerCase() === p) { const k = l[i + 1].toLowerCase(); m.set(k, (m.get(k) || 0) + 1); }
+    }
+    return m;
+  }
+  function placeSuggestions(q, ctx) {
     q = (q || '').trim().toLowerCase();
+    const nx = nextAfter(ctx && ctx.prev);
     const score = (name) => {
       const n = name.toLowerCase();
       if (!q) return 1;
@@ -1282,8 +1416,9 @@
     for (const p of KNOWN_PLACES) cand.push({ name: p.name, sub: 'Known site', icon: '🏭', lat: p.lat, lon: p.lon, w: 0 });
     // Skip what you're typing right now (the drop line saves as you type, so it is already "used once").
     const typing = (c) => c.icon === '🕘' && (c.c || 0) <= 1 && c.name.trim().toLowerCase() === q;
-    const ranked = cand.map((c) => ({ ...c, sc: score(c.name) })).filter((c) => c.sc > 0 && !typing(c))
-      .sort((a, b) => b.sc - a.sc || b.w - a.w || ((a.d ?? 1e9) - (b.d ?? 1e9)) || (b.c || 0) - (a.c || 0));
+    const ranked = cand.map((c) => ({ ...c, sc: score(c.name), nx: nx.get(c.name.toLowerCase()) || 0 })).filter((c) => c.sc > 0 && !typing(c))
+      .sort((a, b) => b.sc - a.sc || b.nx - a.nx || b.w - a.w || ((a.d ?? 1e9) - (b.d ?? 1e9)) || (b.c || 0) - (a.c || 0));
+    for (const c of ranked) if (c.nx) c.sub = `Usually next (${c.nx}×) · ${c.sub}`;
     const seen = new Set(), out = [];
     for (const c of ranked) { const k = c.name.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(c); if (out.length >= 8) break; }
     return out;
@@ -1292,7 +1427,7 @@
     const i = q ? name.toLowerCase().indexOf(q.trim().toLowerCase()) : -1;
     return i < 0 || !q.trim() ? esc(name) : esc(name.slice(0, i)) + '<u>' + esc(name.slice(i, i + q.trim().length)) + '</u>' + esc(name.slice(i + q.trim().length));
   };
-  function typeahead(input, onPick) {
+  function typeahead(input, onPick, ctx) {
     input.setAttribute('autocomplete', 'off'); input.removeAttribute('list');
     const wrap = document.createElement('div');
     wrap.className = 'ta-wrap';
@@ -1303,7 +1438,7 @@
     let items = [], act = -1;
     const hide = () => { box.classList.add('hidden'); act = -1; };
     const render = () => {
-      items = placeSuggestions(input.value);
+      items = placeSuggestions(input.value, ctx && ctx());
       const exact = items.length === 1 && items[0].name.toLowerCase() === input.value.trim().toLowerCase();
       if (!items.length || exact) return hide();
       box.innerHTML = items.map((it, i) => `<div class="ta-it${i === act ? ' on' : ''}" data-i="${i}" role="option"><span class="ta-ic">${it.icon}</span>` +
@@ -1329,6 +1464,11 @@
     box.addEventListener('pointerdown', (e) => { const el = e.target.closest('.ta-it'); if (!el) return; e.preventDefault(); pick(items[+el.dataset.i]); });
   }
 
+  // Esri satellite imagery, optionally with road and place names on top.
+  function satLayer(labels) {
+    const esri = (p) => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${p}/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, attribution: 'Imagery © Esri' });
+    return labels ? L.layerGroup([esri('World_Imagery'), esri('Reference/World_Transportation'), esri('Reference/World_Boundaries_and_Places')]) : esri('World_Imagery');
+  }
   // ---- pin map: move the map until the pin sits on the gate (satellite by default) -----------------------
   async function pinMap(center, title) {
     try { await loadLeaflet(); } catch { alert('The map needs an internet connection.'); return null; }
@@ -1343,7 +1483,7 @@
       sh.close = () => { close(); resolve(result); };
       const m = L.map($('.pin-canvas', sh), { zoomControl: true, attributionControl: true }).setView([center.lat, center.lon], center.zoom || 18);
       const street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' });
-      const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Imagery © Esri' });
+      const sat = satLayer(true);
       let isSat = (center.zoom || 18) >= 15;
       (isSat ? sat : street).addTo(m);
       const ll = () => { const c = m.getCenter(); $('[data-m=ll]', sh).textContent = `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`; };

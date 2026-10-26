@@ -35,6 +35,9 @@ Weekly use
    rename it everywhere, remove it from the list, or star it. Typing in any place box
    suggests your ⭐ starred spots first (picking one also saves its exact position).
    On a phone: swipe left/right to change day, or use the week strip.
+   Trailers: "+ Couple", type the trailer number once; every drop after it (also on the next
+   days) shows 🚛 that trailer until you uncouple ("✂ Uncouple" in the banner). Drops are numbered.
+   The name box learns your routes ("Usually next"), and "↻ Same as another day" copies a run.
 2. Download your driver card (.ddd) and load it ("Load .ddd file", or drop it on the page).
 3. Timesheet tab: pick the week, check it, add expenses ("Add photo" attaches the receipt).
 4. Download PDF (or Share on a phone): timesheet, subsistence claim, then the receipts.
