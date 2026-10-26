@@ -1,5 +1,5 @@
-TRUKIA
-======
+TUKI
+====
 
 Online (PC or phone): https://yessirks.github.io/tacho-timesheet/
 
@@ -38,7 +38,7 @@ Weekly use
    Trailers: "+ Couple", type the trailer number once; every drop after it (also on the next
    days) shows 🚛 that trailer until you uncouple ("✂ Uncouple" in the banner). Drops are numbered.
    The name box learns your routes ("Usually next"), and "↻ Same as another day" copies a run.
-   Were you here?: while Trukia is open it notices when you arrive at a starred / saved place
+   Were you here?: while Tuki is open it notices when you arrive at a starred / saved place
    ("📍 You're at …" → Drop / Pickup / Couple). Each diary day also lists starred / saved places
    your phone or the tacho GPS saw that day, to add in one tap. (Switches in Me > Presets.)
 2. Download your driver card (.ddd) and load it ("Load .ddd file", or drop it on the page).
@@ -67,7 +67,7 @@ On iPhone, add the app to the Home Screen, otherwise Safari may clear it after a
 
 Android app (APK)
 -----------------
-Download https://github.com/yessirks/tacho-timesheet/releases/download/trukia-latest/Trukia.apk
+Download https://github.com/yessirks/tacho-timesheet/releases/download/tuki-latest/Tuki.apk
 on the phone and open it to install. It's the same app, full-screen, and updates itself with the
 website. Built by .github/workflows/android.yml; the signing key lives in Desktop\Trukia-signing-key
 (keep it safe: updates must be signed with the same key).

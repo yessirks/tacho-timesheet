@@ -1,4 +1,4 @@
-// Trukia for Android: a Trusted Web Activity that opens the Trukia web app full-screen in Chrome.
+// Tuki for Android: a Trusted Web Activity that opens the Tuki web app full-screen in Chrome.
 // Built on GitHub Actions (.github/workflows/android.yml); the signing key comes from repo secrets.
 plugins {
     id 'com.android.application'

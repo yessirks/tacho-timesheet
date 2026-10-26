@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Trukia</title>
-<meta name="description" content="Trukia: save exact drop locations, navigate, keep a driving diary and fill your weekly timesheet from the tacho.">
-<meta name="apple-mobile-web-app-title" content="Trukia">
+<title>Tuki</title>
+<meta name="description" content="Tuki: save exact drop locations, navigate, keep a driving diary and fill your weekly timesheet from the tacho.">
+<meta name="apple-mobile-web-app-title" content="Tuki">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -17,7 +17,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <style>
   /* =====================================================================
-     TRUKIA DESIGN SYSTEM
+     TUKI DESIGN SYSTEM
      Deep-navy brand header, floating pill tabs, soft glassy cards,
      blue→cyan accents, timeline drops. Light + dark.
      ===================================================================== */
@@ -395,7 +395,7 @@
 </head>
 <body>
 <header>
-  <div class="brand"><img src="icons/icon-192.png" alt=""><h1>Trukia</h1></div>
+  <div class="brand"><img src="icons/icon-192.png" alt=""><h1>Tuki</h1></div>
   <div class="card-info" id="cardInfo">No card file loaded</div>
   <label class="btn load-btn"><span class="ic">📂</span><span class="lb">Load .ddd file</span><input type="file" id="fileInput" hidden></label>
   <nav class="tabs" role="tablist">
@@ -531,7 +531,7 @@
   <div>
     <section>
       <h2>🗺 Map <span class="sub">Save exact spots, like the gate of a drop, and open them in Google Maps, Waze or TomTom.</span></h2>
-      <div class="here-hint hidden" id="hereHint">📍 Turn on location and Trukia will tell you when you arrive at a starred place, so you can add it to the diary in one tap.
+      <div class="here-hint hidden" id="hereHint">📍 Turn on location and Tuki will tell you when you arrive at a starred place, so you can add it to the diary in one tap.
         <button type="button" class="btn small primary" id="hereOn">Turn on</button></div>
       <div class="map-wrap">
         <div id="map"></div>
@@ -597,7 +597,7 @@
         <label class="f">Remember place names I type<select id="setLearn"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Night out if day ends more than (km) from base<input id="setAway" type="number" min="1"></label>
         <label class="f">Read receipts automatically (amount, VAT, type)<select id="setAutoRead"><option value="yes">Yes</option><option value="no">No</option></select></label>
-        <label class="f">Tell me when I'm at a starred / saved place (while Trukia is open)<select id="setHere"><option value="yes">Yes</option><option value="no">No</option></select></label>
+        <label class="f">Tell me when I'm at a starred / saved place (while Tuki is open)<select id="setHere"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Suggest "Were you here?" from the tacho GPS<select id="setNearTacho"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Write "Drop" before drop names on the timesheet<select id="setDropWord"><option value="no">No (just the name)</option><option value="yes">Yes</option></select></label>
       </div>
@@ -626,7 +626,7 @@
 <datalist id="placeNames"></datalist>
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="hereBar" role="alert"></div>
-<footer>Trukia · everything stays on this device. Place names © OpenStreetMap contributors (Nominatim). Times are UK local time.</footer>
+<footer>Tuki · everything stays on this device. Place names © OpenStreetMap contributors (Nominatim). Times are UK local time.</footer>
 
 <script src="lib/pdf-lib.min.js"></script>
 <script src="logo.js"></script>

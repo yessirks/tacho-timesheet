@@ -166,7 +166,7 @@
   // ---- export / import ------------------------------------------------------------------------------
   const x = (s) => String(s ?? '').replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
   function toGPX(list) {
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Trukia" xmlns="http://www.topografix.com/GPX/1/1">\n` +
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Tuki" xmlns="http://www.topografix.com/GPX/1/1">\n` +
       list.map((p) => `  <wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}"><name>${x(p.name)}</name>${p.note ? `<desc>${x(p.note)}</desc>` : ''}</wpt>`).join('\n') + '\n</gpx>\n';
   }
   function toKML(list) {

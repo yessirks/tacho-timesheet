@@ -1,7 +1,7 @@
-# Builds the Trukia Android app (APK) and publishes it as the "trukia-latest" release:
-# https://github.com/yessirks/tacho-timesheet/releases/download/trukia-latest/Trukia.apk
+# Builds the Tuki Android app (APK) and publishes it as the "tuki-latest" release:
+# https://github.com/yessirks/tacho-timesheet/releases/download/tuki-latest/Tuki.apk
 # Without the signing-key secrets it still compiles (to check the project) but publishes nothing.
-name: Build Trukia APK
+name: Build Tuki APK
 on:
   push:
     branches: [main]
@@ -41,15 +41,15 @@ jobs:
         run: |
           if [ ! -f android/app/build/outputs/apk/release/app-release.apk ]; then
             echo "::error::The app built fine but isn't signed, so nothing was published. Add the signing key (add-key-to-github.ps1) and run this workflow again."; exit 1; fi
-          cp android/app/build/outputs/apk/release/app-release.apk Trukia.apk
+          cp android/app/build/outputs/apk/release/app-release.apk Tuki.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Trukia-apk
-          path: Trukia.apk
+          name: Tuki-apk
+          path: Tuki.apk
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete trukia-latest --yes --cleanup-tag || true
-          gh release create trukia-latest Trukia.apk --title "Trukia 1.0.${{ github.run_number }}" --latest \
-            --notes "Trukia for Android. On your phone, download Trukia.apk and open it to install (allow installing from your browser if asked). The app updates itself with the website; you only need a new APK when this page says so."
+          gh release delete tuki-latest --yes --cleanup-tag || true
+          gh release create tuki-latest Tuki.apk --title "Tuki 1.0.${{ github.run_number }}" --latest \
+            --notes "Tuki for Android. On your phone, download Tuki.apk and open it to install (allow installing from your browser if asked). The app updates itself with the website; you only need a new APK when this page says so."

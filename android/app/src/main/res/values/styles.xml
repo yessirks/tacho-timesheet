@@ -1,9 +1,9 @@
 <resources>
-    <style name="Theme.Trukia" parent="Theme.AppCompat.Light.NoActionBar">
+    <style name="Theme.Tuki" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimary</item>
     </style>
-    <style name="Theme.Trukia.Launcher" parent="Theme.AppCompat.NoActionBar">
+    <style name="Theme.Tuki.Launcher" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowAnimationStyle">@null</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowNoTitle">true</item>

@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Trukia",
-  "short_name": "Trukia",
+  "name": "Tuki",
+  "short_name": "Tuki",
   "description": "Save exact drop locations, navigate, keep a driving diary and fill your weekly timesheet from the tacho.",
   "start_url": "./index.html",
   "scope": "./",

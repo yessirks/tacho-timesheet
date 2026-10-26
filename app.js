@@ -1,4 +1,4 @@
-/* Trukia: UI glue. Data flow: .ddd → Tacho.parse → Week.computeWeek → (auto values + your edits) → TimesheetPDF.build */
+/* Tuki: UI glue. Data flow: .ddd → Tacho.parse → Week.computeWeek → (auto values + your edits) → TimesheetPDF.build */
 (function () {
   'use strict';
   const $ = (s, el = document) => el.querySelector(s);
@@ -1524,7 +1524,7 @@
     }, { passive: true });
   }
 
-  // ---- "Were you here?": starred / saved places you were at (your phone while Trukia is open, or the tacho) ----
+  // ---- "Were you here?": starred / saved places you were at (your phone while Tuki is open, or the tacho) ----
   let visits = LS.get('visits', {});   // "YYYY-MM-DD" -> [{ name, lat, lon, t }]
   const herePlaces = () => [
     ...stars.map((s) => ({ name: s.name, lat: s.lat, lon: s.lon, r: s.radius || 250, icon: '⭐' })),
@@ -1590,7 +1590,7 @@
       });
     });
   }
-  // Live: while Trukia is open, notice arriving at a starred / saved place and offer to add it to today.
+  // Live: while Tuki is open, notice arriving at a starred / saved place and offer to add it to today.
   let hereWatch = null, hereShown = '';
   function startHereWatch() {
     if (hereWatch !== null || !navigator.geolocation || profile.hereAlerts === 'no' || document.hidden) return;
@@ -1632,7 +1632,7 @@
     // Any time you allow location (a 📍 button), the live check starts too.
     const orig = Geo.here;
     Geo.here = async (...a) => { const p = await orig(...a); startHereWatch(); return p; };
-    $('#hereOn').onclick = async () => { try { await Geo.here(); toast("✓ Trukia will tell you when you're at a starred place"); } catch (e) { alert(e.message); } };
+    $('#hereOn').onclick = async () => { try { await Geo.here(); toast("✓ Tuki will tell you when you're at a starred place"); } catch (e) { alert(e.message); } };
     let state = 'prompt';
     try { state = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch { /* unknown */ }
     if (state === 'granted') startHereWatch();
@@ -1657,7 +1657,7 @@
     $$('nav.tabs [data-tab]').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
     $$('a.tablink').forEach((a) => a.onclick = (e) => { e.preventDefault(); showTab(a.getAttribute('href').slice(1)); });
     window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
-    showTab(location.hash.slice(1) || 'places');   // Trukia always opens on the map
+    showTab(location.hash.slice(1) || 'places');   // Tuki always opens on the map
   }
 
   // ---- storage: keep it, back it up --------------------------------------------------------------
@@ -1677,7 +1677,7 @@
     const weeks = {};
     for (const [k, v] of await idb.entries()) if (String(k).startsWith('week:')) weeks[k] = stripPhotos(v);
     const data = { app: 'tacho-timesheet', version: 4, exported: new Date().toISOString(), profile, places, stars, diary, geo, weeks };
-    download(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }), `trukia-data-${todayKey()}.json`);
+    download(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }), `tuki-data-${todayKey()}.json`);
   }
   async function importAll(file) {
     const j = JSON.parse(await file.text());
