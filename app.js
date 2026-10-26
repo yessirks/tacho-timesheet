@@ -518,7 +518,6 @@
     cv.onpointermove = (e) => { if (!drawing) return; const p = pt(e); cx.beginPath(); cx.moveTo(last.x, last.y); cx.lineTo(p.x, p.y); cx.stroke(); last = p; };
     cv.onpointerup = cv.onpointercancel = () => { drawing = false; };
     $('#sigClear').onclick = () => cx.clearRect(0, 0, cv.width, cv.height);
-    $('#sigMake').onclick = signatureStyles;
     $('#sigSave').onclick = () => { const u = trimCanvas(cv); if (!u) return alert('Sign in the box first.'); profile.signature = u; LS.set('profile', profile); showSig(); schedulePdf(); };
     $('#sigRemove').onclick = () => { delete profile.signature; LS.set('profile', profile); showSig(); schedulePdf(); };
     $('#sigUpload').onchange = async (ev) => {
@@ -536,65 +535,6 @@
       profile.signature = trimCanvas(t); LS.set('profile', profile); showSig(); schedulePdf();
     };
     showSig();
-  }
-  // ✨ Signature styles: your name in a few handwriting fonts, drawn in blue ink.
-  const SIG_FONTS = [['Great Vibes', 70], ['Allura', 72], ['Mr Dafoe', 66], ['Sacramento', 72], ['Dancing Script', 58, 600], ['Homemade Apple', 46]];
-  async function loadSigFonts() {
-    if (!document.getElementById('sigFonts')) {
-      const l = document.createElement('link');
-      l.id = 'sigFonts'; l.rel = 'stylesheet';
-      l.href = 'https://fonts.googleapis.com/css2?family=Allura&family=Dancing+Script:wght@600&family=Great+Vibes&family=Homemade+Apple&family=Mr+Dafoe&family=Sacramento&display=swap';
-      // the font list must arrive before the fonts can be asked for
-      await new Promise((res) => { l.onload = l.onerror = res; setTimeout(res, 5000); document.head.appendChild(l); });
-    }
-    await Promise.all(SIG_FONTS.map(([f, sz, w]) => document.fonts.load(`${w || 400} ${sz}px "${f}"`).catch(() => null)));
-  }
-  function drawSig(text, [font, size, weight], flourish) {
-    const c = document.createElement('canvas'); c.width = 1000; c.height = 320;
-    const x = c.getContext('2d');
-    x.translate(50, 205); x.rotate(-0.06);
-    x.fillStyle = x.strokeStyle = '#0f2a80';
-    let sz = size * 2;
-    const set = () => { x.font = `${weight || 400} ${sz}px "${font}", cursive`; };
-    set(); while (x.measureText(text).width > 860 && sz > 36) { sz -= 4; set(); }
-    x.fillText(text, 0, 0);
-    if (flourish) {
-      const w = x.measureText(text).width;
-      x.lineWidth = Math.max(3, sz / 28); x.lineCap = 'round';
-      x.beginPath(); x.moveTo(-14, sz * 0.32); x.bezierCurveTo(w * 0.3, sz * 0.55, w * 0.65, sz * 0.12, w + 40, sz * 0.26); x.stroke();
-    }
-    return c;
-  }
-  async function signatureStyles() {
-    const id = card && card.identification;
-    const sur = titleCase(id ? id.surname : (profile.name || '').split(' ')[0] || '');
-    const first = titleCase(id ? id.firstNames.split(' ')[0] : (profile.name || '').split(' ')[1] || '');
-    const variants = [...new Set([first && sur ? `${first[0]}. ${sur}` : '', sur, first && sur ? `${first} ${sur}` : '', first && sur ? `${first[0]}${sur[0]}` : ''].filter(Boolean))];
-    const sh = sheet(`<h3>✨ Make my signature</h3>
-      <div class="inp-row"><input data-g="text" value="${esc(variants[0] || '')}" placeholder="Your name"><label class="check small" style="white-space:nowrap"><input type="checkbox" data-g="fl" checked> Underline</label></div>
-      <div class="chips" style="margin-top:6px">${variants.map((v) => `<button type="button" class="chip" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>
-      <p class="small muted" data-g="st">Loading handwriting styles…</p>
-      <div class="sig-grid" data-g="grid"></div>
-      <div class="actions sheet-foot"><button type="button" class="btn small" data-close>Cancel</button></div>`);
-    sh.classList.add('wide');
-    await loadSigFonts();
-    const grid = $('[data-g=grid]', sh), txt = $('[data-g=text]', sh), fl = $('[data-g=fl]', sh);
-    const draw = () => {
-      const t = txt.value.trim();
-      $('[data-g=st]', sh).textContent = t ? 'Tap the one you like:' : 'Type your name above.';
-      grid.innerHTML = '';
-      if (!t) return;
-      SIG_FONTS.forEach((f) => {
-        const c = drawSig(t, f, fl.checked), b = document.createElement('button');
-        b.type = 'button'; b.className = 'sig-opt'; b.title = f[0];
-        b.innerHTML = `<img alt="${esc(f[0])}" src="${c.toDataURL('image/png')}">`;
-        b.onclick = () => { profile.signature = trimCanvas(c); LS.set('profile', profile); showSig(); schedulePdf(); sh.close(); toast('✓ Signature saved'); };
-        grid.appendChild(b);
-      });
-    };
-    txt.oninput = draw; fl.onchange = draw;
-    $$('[data-v]', sh).forEach((c) => c.onclick = () => { txt.value = c.dataset.v; draw(); });
-    draw();
   }
   function showSig() {
     const has = !!profile.signature;
@@ -726,7 +666,7 @@
       const badge = (s) => s.type === 'drop' ? `<span class="stop-no" title="Drop ${++drops}">${drops}</span>`
         : `<span class="stop-no ic" title="${STOP_TYPES[s.type] || ''}">${{ pickup: '⬆', couple: '🔗', uncouple: '✂', other: '•' }[s.type] || '•'}</span>`;
       const refHint = (s, n) => { if (s.type === 'couple') return 'Trailer no.'; const t = trailerBefore(date, n); return t ? `🚛 ${t.ref}` : 'Trailer / ref'; };
-      box.innerHTML = (endT ? `<div class="trailer-on">🚛 Trailer <b>${esc(endT.ref)}</b> coupled${endT.date !== date ? ` since ${DAYS[dayIdx(endT.date)].slice(0, 3)} ${fmtDay(endT.date)}` : ''}${endT.at ? ` at ${esc(endT.at)}` : ''}
+      box.innerHTML = (endT ? `<div class="trailer-on"><span>🚛 Trailer <b>${esc(endT.ref)}</b> coupled${endT.date !== date ? ` since ${DAYS[dayIdx(endT.date)].slice(0, 3)} ${fmtDay(endT.date)}` : ''}${endT.at ? ` at ${esc(endT.at)}` : ''}</span>
           <button type="button" class="btn small" data-uncouple>✂ Uncouple ${esc(endT.ref)}</button></div>` : '')
         + (l.length ? '' : '<p class="small muted empty">Nothing added yet.</p>') + `<div class="stops">${l.map((s, n) => `<div class="stop" data-n="${n}">${badge(s)}
           <select data-s="type" aria-label="Type">${Object.entries(STOP_TYPES).map(([k, v]) => `<option value="${k}" ${s.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
