@@ -31,7 +31,8 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.release
+            // no key (e.g. a check build): produce an unsigned APK instead of failing
+            signingConfig System.getenv('KEYSTORE_FILE') ? signingConfigs.release : null
         }
     }
 
