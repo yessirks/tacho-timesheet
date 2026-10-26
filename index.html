@@ -354,6 +354,19 @@
   .sig-opt { appearance: none; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px; cursor: pointer; }
   .sig-opt:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .sig-opt img { width: 100%; height: 86px; object-fit: contain; display: block; }
+
+  /* were you here? */
+  .near { border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); background: color-mix(in srgb, var(--accent) 5%, var(--panel)); border-radius: 12px; padding: 8px 10px; margin-bottom: 10px; }
+  .near-h { font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+  .near-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--line); }
+  .near-row:first-of-type { border-top: 0; }
+  .near-tx, .here-tx { display: flex; flex-direction: column; min-width: 0; }
+  .near-tx small, .here-tx small { color: var(--muted); font-size: 12px; }
+  .near-act { display: flex; gap: 6px; flex-wrap: wrap; }
+  .here-hint { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; font-size: 13px; padding: 8px 10px; margin-bottom: 10px; border-radius: 12px; background: var(--soft); }
+  #hereBar { position: fixed; left: 50%; top: calc(10px + env(safe-area-inset-top)); transform: translate(-50%, -140%); width: min(560px, calc(100% - 20px)); z-index: 35; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.2); transition: transform .25s ease-out; }
+  #hereBar.show { transform: translate(-50%, 0); }
 </style>
 </head>
 <body>
@@ -471,6 +484,7 @@
       </div>
       <div class="ed-block">
         <h3 class="ed-h">🚚 Drops, pickups &amp; coupling</h3>
+        <div id="calNear"></div>
         <div id="calStops"></div>
         <div class="small muted hint">Tap a name you've used before · hold it to rename, remove or star it</div>
         <div id="calChips" class="chips"></div>
@@ -493,6 +507,8 @@
   <div>
     <section>
       <h2>🗺 Map <span class="sub">Save exact spots, like the gate of a drop, and open them in Google Maps, Waze or TomTom.</span></h2>
+      <div class="here-hint hidden" id="hereHint">📍 Turn on location and Trukia will tell you when you arrive at a starred place, so you can add it to the diary in one tap.
+        <button type="button" class="btn small primary" id="hereOn">Turn on</button></div>
       <div class="actions map-actions">
         <button type="button" class="btn primary" id="starPaste">＋ Add place</button>
         <button type="button" class="btn" id="starHere">📍 Star where I am</button>
@@ -556,6 +572,8 @@
         <label class="f">Remember place names I type<select id="setLearn"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Night out if day ends more than (km) from base<input id="setAway" type="number" min="1"></label>
         <label class="f">Read receipts automatically (amount, VAT, type)<select id="setAutoRead"><option value="yes">Yes</option><option value="no">No</option></select></label>
+        <label class="f">Tell me when I'm at a starred / saved place (while Trukia is open)<select id="setHere"><option value="yes">Yes</option><option value="no">No</option></select></label>
+        <label class="f">Suggest "Were you here?" from the tacho GPS<select id="setNearTacho"><option value="yes">Yes</option><option value="no">No</option></select></label>
         <label class="f">Write "Drop" before drop names on the timesheet<select id="setDropWord"><option value="no">No (just the name)</option><option value="yes">Yes</option></select></label>
       </div>
       <h2 style="margin-top:16px">Email to the office</h2>
@@ -582,6 +600,7 @@
 
 <datalist id="placeNames"></datalist>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="hereBar" role="alert"></div>
 <footer>Trukia · everything stays on this device. Place names © OpenStreetMap contributors (Nominatim). Times are UK local time.</footer>
 
 <script src="lib/pdf-lib.min.js"></script>

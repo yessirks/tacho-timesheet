@@ -950,6 +950,7 @@
       onHold(c, () => chipMenu(s));
     });
     dayExpensesEditor($('#calExp'), calSel);
+    renderNear();
   }
   function setupCal() {
     calSel = todayKey(); calMonth = calSel.slice(0, 7);
@@ -1266,16 +1267,16 @@
     try { await loadLeaflet(); } catch { $('#map').innerHTML = '<p class="small muted" style="padding:12px">The map needs an internet connection.</p>'; return; }
     if (!map) {
       map = L.map('map', { zoomControl: true }).setView([52.4, -2.5], 6);
-      // Base maps: Clean (Esri streets, close to Google Maps), OpenStreetMap, satellite with and without road names.
+      // Base maps: the original OpenStreetMap (default), Clean (Esri streets), satellite with and without road names.
       const bases = {
+        Map: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }),
         Clean: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Map © Esri' }),
-        'Street map': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }),
         'Satellite + roads': satLayer(true),
         Satellite: satLayer(false),
       };
-      let base = 'Clean'; try { base = localStorage.getItem('tt.mapBase') || 'Clean'; } catch { /* ignore */ }
-      (bases[base] || bases.Clean).addTo(map);
-      map.on('baselayerchange', (e) => { try { localStorage.setItem('tt.mapBase', e.name); } catch { /* ignore */ } });
+      let base = 'Map'; try { base = localStorage.getItem('tt.mapStyle') || 'Map'; } catch { /* ignore */ }
+      (bases[base] || bases.Map).addTo(map);
+      map.on('baselayerchange', (e) => { try { localStorage.setItem('tt.mapStyle', e.name); } catch { /* ignore */ } });
       mapLayers = { areas: L.layerGroup().addTo(map), drops: L.layerGroup().addTo(map), stars: L.layerGroup().addTo(map), me: L.layerGroup().addTo(map) };
       L.control.layers(bases, { '⭐ Starred': mapLayers.stars, '🚚 My drops': mapLayers.drops, '◯ Saved areas': mapLayers.areas }, { position: 'topright' }).addTo(map);
       const Locate = L.Control.extend({
@@ -1583,6 +1584,122 @@
     }, { passive: true });
   }
 
+  // ---- "Were you here?": starred / saved places you were at (your phone while Trukia is open, or the tacho) ----
+  let visits = LS.get('visits', {});   // "YYYY-MM-DD" -> [{ name, lat, lon, t }]
+  const herePlaces = () => [
+    ...stars.map((s) => ({ name: s.name, lat: s.lat, lon: s.lon, r: s.radius || 250, icon: '⭐' })),
+    ...places.filter((p) => p.name && !p.base).map((p) => ({ name: p.name, lat: p.lat, lon: p.lon, r: Math.min(p.radius || 500, 1500), icon: '📌' })),
+  ];
+  function placeAt(pos) {
+    let best = null, bd = Infinity;
+    for (const p of herePlaces()) {
+      const d = Geo.distM(pos, p);
+      if (d <= p.r + Math.min(pos.acc || 0, 100) && d < bd) { best = p; bd = d; }
+    }
+    return best;
+  }
+  function logVisit(p, t) {
+    const d = Week.localKey(t), list = visits[d] || (visits[d] = []);
+    if (list.some((v) => v.name === p.name)) return;
+    list.push({ name: p.name, lat: p.lat, lon: p.lon, t });
+    const cut = Week.addDays(todayKey(), -120);
+    for (const k of Object.keys(visits)) if (k < cut) delete visits[k];
+    LS.set('visits', visits);
+  }
+  const inDay = (date, name) => { const e = dget(date); return [e.start, e.finish, ...(e.stops || []).map((x) => x.name)].some((n) => (n || '').trim().toLowerCase() === name.toLowerCase()); };
+  const dismissed = (date, name) => ((profile.nearDismiss || {})[date] || []).includes(name);
+  function dismiss(date, name) {
+    const nd = profile.nearDismiss || (profile.nearDismiss = {});
+    (nd[date] = nd[date] || []).push(name);
+    for (const k of Object.keys(nd)) if (k < Week.addDays(todayKey(), -60)) delete nd[k];
+    LS.set('profile', profile);
+  }
+  function addStopTo(date, st) {
+    const l = (dget(date).stops || []).filter((x) => (x.name || x.ref || '').trim());
+    l.push(st);
+    setDiary(date, 'stops', l);
+    redrawStopEditors(date);
+  }
+  // Places for a day: phone visits first, then tacho GPS positions that fall inside a place.
+  function nearbyFor(date) {
+    const out = new Map();
+    for (const v of visits[date] || []) out.set(v.name.toLowerCase(), { ...v, src: 'phone', time: Week.local(v.t).time });
+    if (prep && profile.nearTacho !== 'no') {
+      for (const f of prep.fixes) {
+        if (Week.localKey(f.t) !== date) continue;
+        const p = placeAt(f.pos);
+        if (p && !out.has(p.name.toLowerCase())) out.set(p.name.toLowerCase(), { name: p.name, lat: p.lat, lon: p.lon, src: 'tacho', time: Week.local(f.t).time });
+      }
+    }
+    return [...out.values()].filter((v) => !inDay(date, v.name) && !dismissed(date, v.name)).sort((a, b) => a.time.localeCompare(b.time));
+  }
+  function renderNear() {
+    const box = $('#calNear');
+    if (!box) return;
+    const list = nearbyFor(calSel);
+    if (!list.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="near"><div class="near-h">📍 Were you here?</div>${list.map((v, i) => `<div class="near-row" data-i="${i}">
+        <span class="near-tx"><b>${esc(v.name)}</b><small>${v.src === 'phone' ? '📱 your phone' : '🚚 tacho GPS'} · ${v.time}</small></span>
+        <span class="near-act"><button type="button" class="btn small" data-t="drop">+ Drop</button><button type="button" class="btn small" data-t="pickup">+ Pickup</button><button type="button" class="btn small link" data-t="no" title="No, I wasn't">✕</button></span></div>`).join('')}</div>`;
+    $$('.near-row', box).forEach((row) => {
+      const v = list[+row.dataset.i];
+      $$('[data-t]', row).forEach((b) => b.onclick = () => {
+        if (b.dataset.t === 'no') { dismiss(calSel, v.name); renderNear(); return; }
+        addStopTo(calSel, { type: b.dataset.t, name: v.name, lat: v.lat, lon: v.lon });
+        renderCal(); toast(`Added ${STOP_TYPES[b.dataset.t]} ${v.name}`);
+      });
+    });
+  }
+  // Live: while Trukia is open, notice arriving at a starred / saved place and offer to add it to today.
+  let hereWatch = null, hereShown = '';
+  function startHereWatch() {
+    if (hereWatch !== null || !navigator.geolocation || profile.hereAlerts === 'no' || document.hidden) return;
+    hereWatch = navigator.geolocation.watchPosition((p) => {
+      const pos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, t: p.timestamp || Date.now() };
+      lastPos = pos;
+      const pl = placeAt(pos);
+      if (!pl) return;
+      logVisit(pl, pos.t);
+      offerHere(pl);
+    }, () => {}, { enableHighAccuracy: true, maximumAge: 30000, timeout: 60000 });
+    const hint = $('#hereHint'); if (hint) hint.classList.add('hidden');
+  }
+  function stopHereWatch() { if (hereWatch !== null) { navigator.geolocation.clearWatch(hereWatch); hereWatch = null; } }
+  function offerHere(pl) {
+    const d = todayKey(), key = d + '|' + pl.name;
+    if (hereShown === key || inDay(d, pl.name) || dismissed(d, pl.name)) return;
+    hereShown = key;
+    const bar = $('#hereBar');
+    bar.innerHTML = `<div class="here-tx"><b>📍 You're at ${esc(pl.name)}</b><small>Add it to today's diary?</small></div>
+      <div class="near-act"><button type="button" class="btn small primary" data-t="drop">Drop</button><button type="button" class="btn small" data-t="pickup">Pickup</button><button type="button" class="btn small" data-t="couple">Couple</button><button type="button" class="btn small link" data-t="no" title="Not now">✕</button></div>`;
+    bar.classList.add('show');
+    if (navigator.vibrate) navigator.vibrate([30, 60, 30]);
+    $$('[data-t]', bar).forEach((b) => b.onclick = () => {
+      bar.classList.remove('show');
+      if (b.dataset.t === 'no') { dismiss(d, pl.name); return; }
+      addStopTo(d, { type: b.dataset.t, name: pl.name, lat: pl.lat, lon: pl.lon });
+      if (calMonth && $('#tab-diary').classList.contains('on')) renderCal();
+      toast(`Added ${STOP_TYPES[b.dataset.t]} ${pl.name} to today`);
+      if (b.dataset.t === 'couple') { showTab('diary'); toast('Type the trailer number on the Couple line'); }
+    });
+  }
+  async function setupHere() {
+    $('#setHere').value = profile.hereAlerts || 'yes';
+    $('#setNearTacho').value = profile.nearTacho || 'yes';
+    $('#setHere').onchange = (e) => { profile.hereAlerts = e.target.value; LS.set('profile', profile); if (e.target.value === 'no') stopHereWatch(); else startHereWatch(); };
+    $('#setNearTacho').onchange = (e) => { profile.nearTacho = e.target.value; LS.set('profile', profile); renderNear(); };
+    if (!navigator.geolocation) return;
+    // Any time you allow location (a 📍 button), the live check starts too.
+    const orig = Geo.here;
+    Geo.here = async (...a) => { const p = await orig(...a); startHereWatch(); return p; };
+    $('#hereOn').onclick = async () => { try { await Geo.here(); toast("✓ Trukia will tell you when you're at a starred place"); } catch (e) { alert(e.message); } };
+    let state = 'prompt';
+    try { state = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch { /* unknown */ }
+    if (state === 'granted') startHereWatch();
+    else if (profile.hereAlerts !== 'no') $('#hereHint').classList.remove('hidden');
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stopHereWatch(); else if (state === 'granted' || lastPos) startHereWatch(); });
+  }
+
   // ---- tabs -------------------------------------------------------------------------------------
   function showTab(t) {
     if (!['sheet', 'diary', 'places', 'me'].includes(t)) t = 'places';
@@ -1831,7 +1948,7 @@
       navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch((e) => console.warn('offline mode unavailable', e));
     }
     $('#downloadBlank').onclick = async () => download(new Blob([await TimesheetPDF.build({})], { type: 'application/pdf' }), 'TC_timesheet_blank.pdf');
-    setupSignature(); setupSettings(); setupFill(); setupCal(); setupEmail(); renderPlaces(); setupPlaces(); setupTabs(); setupStorage();
+    setupSignature(); setupSettings(); setupFill(); setupCal(); setupEmail(); renderPlaces(); setupPlaces(); setupTabs(); setupStorage(); setupHere();
     window.TachoTimesheetDebug = { buildData, get card() { return card; } };
     idb.set('timeline', null);   // the Google Timeline import was removed; drop any old data
     $('#setAutoRead').value = profile.autoRead || 'yes';

@@ -38,6 +38,9 @@ Weekly use
    Trailers: "+ Couple", type the trailer number once; every drop after it (also on the next
    days) shows 🚛 that trailer until you uncouple ("✂ Uncouple" in the banner). Drops are numbered.
    The name box learns your routes ("Usually next"), and "↻ Same as another day" copies a run.
+   Were you here?: while Trukia is open it notices when you arrive at a starred / saved place
+   ("📍 You're at …" → Drop / Pickup / Couple). Each diary day also lists starred / saved places
+   your phone or the tacho GPS saw that day, to add in one tap. (Switches in Me > Presets.)
 2. Download your driver card (.ddd) and load it ("Load .ddd file", or drop it on the page).
 3. Timesheet tab: pick the week, check it, add expenses ("Add photo" attaches the receipt).
 4. Download PDF (or Share on a phone): timesheet, subsistence claim, then the receipts.
