@@ -40,7 +40,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.TRUKIA_KEYSTORE_PASSWORD }}
         run: |
           export KEYSTORE_FILE="$RUNNER_TEMP/trukia.p12"
-          flutter build apk --release --build-name 2.0.${{ github.run_number }} --build-number ${{ github.run_number }}
+          flutter build apk --release --target-platform android-arm64 --build-name 2.0.${{ github.run_number }} --build-number ${{ github.run_number }}
           cp build/app/outputs/flutter-apk/app-release.apk ../Tuki-native.apk
       - uses: actions/upload-artifact@v4
         with:
