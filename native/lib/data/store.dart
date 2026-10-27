@@ -519,12 +519,16 @@ class AppStore extends ChangeNotifier {
     }
     for (final e in diary.values) { for (final n in [e['start'], e['finish']]) { if ((n ?? '').toString().isNotEmpty) cand.add(Suggestion(n, 'From your diary', '🕘', w: 1)); } }
     for (final p in knownPlaces) { cand.add(Suggestion(p['name'] as String, 'Known site', '🏭', lat: p['lat'] as double, lon: p['lon'] as double)); }
+    final today = todayKey();
+    for (final v in nearbyFor(today)) { cand.add(Suggestion(v.name, 'You were here today · ${v.time}', '📍', lat: v.lat, lon: v.lon, w: 4)); }
+    final visited = {for (final v in nearbyFor(today)) v.name.toLowerCase()};
+    double? away(double? lat, double? lon) => lastPos == null || lat == null || lon == null ? null : geo.distM(lastPos!.lat, lastPos!.lon, lat, lon);
     // Skip what you're typing right now (the stop line saves as you type, so it is already "used once").
     bool typing(Suggestion c) => c.icon == '🕘' && c.c <= 1 && c.name.trim().toLowerCase() == q;
     final ranked = [
       for (final c in cand)
         if (score(c.name) > 0 && !typing(c))
-          Suggestion(c.name, c.sub, c.icon, lat: c.lat, lon: c.lon, w: c.w, c: c.c, d: c.d, sc: score(c.name), nx: nx[c.name.toLowerCase()] ?? 0)
+          Suggestion(c.name, c.sub, c.icon, lat: c.lat, lon: c.lon, w: c.w, c: c.c, d: c.d ?? away(c.lat, c.lon), sc: score(c.name), nx: nx[c.name.toLowerCase()] ?? 0)
     ]..sort((a, b) {
         int cmp(num x, num y) => x.compareTo(y);
         var r = cmp(b.sc, a.sc); if (r != 0) return r;
@@ -533,6 +537,8 @@ class AppStore extends ChangeNotifier {
         r = cmp(a.d ?? 1e9, b.d ?? 1e9); if (r != 0) return r;
         return cmp(b.c, a.c);
       });
+    // Nothing typed yet: only what fits right now (near you, where you were today, or your usual next stop).
+    if (q.isEmpty) ranked.retainWhere((c) => (c.d != null && c.d! <= 3000) || c.nx > 0 || visited.contains(c.name.toLowerCase()));
     final seen = <String>{}, out = <Suggestion>[];
     for (final c in ranked) {
       if (!seen.add(c.name.toLowerCase())) continue;
@@ -582,8 +588,9 @@ class AppStore extends ChangeNotifier {
     changed();
   }
 
-  void addStopTo(String date, J st) {
-    final l = stopsOn(date).where((x) => '${x['name'] ?? ''}${x['ref'] ?? ''}'.trim().isNotEmpty).toList()..add(st);
+  /// Adds a stop to a day (empty lines are tidied away, unless `keepEmpty` because you'll name it later).
+  void addStopTo(String date, J st, {bool keepEmpty = false}) {
+    final l = stopsOn(date).where((x) => keepEmpty || '${x['name'] ?? ''}${x['ref'] ?? ''}'.trim().isNotEmpty).toList()..add(st);
     setStops(date, l);
   }
 

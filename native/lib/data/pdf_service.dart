@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:printing/printing.dart';
 import '../core/timesheet_pdf.dart';
-import '../core/week.dart';
 import 'store.dart';
 
 Uint8List? _logo;
@@ -49,32 +48,27 @@ WeekTotals weekTotals(AppStore s, String sun) { final (_, t) = expenseRows(s, su
 
 Future<List<Attachment>> _attachments(AppStore s, String sun) async {
   final ws = s.weekState(sun), out = <Attachment>[];
-  Future<void> add(Map att, String caption) async {
+  Future<void> add(Map att) async {
     final f = s.attFile(att);
     if (f == null || !await f.exists()) return;
     final bytes = await f.readAsBytes(), rot = ((att['rot'] as num?) ?? 0).toInt() % 360;
     // Turned the way you set it in the receipt viewer; each page then gets a portrait or landscape sheet to match.
     Uint8List turned(img.Image im) => img.encodeJpg(rot == 0 ? im : img.copyRotate(im, angle: rot), quality: 85);
     if (att['kind'] == 'pdf') {
-      var n = 0;
       await for (final page in Printing.raster(bytes, dpi: 130)) {
         final im = img.Image.fromBytes(width: page.width, height: page.height, bytes: page.pixels.buffer, numChannels: 4, order: img.ChannelOrder.rgba);
-        out.add(Attachment(turned(im), n++ == 0 ? caption : ''));
+        out.add(Attachment(turned(im)));
       }
     } else if (rot != 0) {
       final im = img.decodeImage(bytes);
-      out.add(Attachment(im == null ? bytes : turned(im), caption));
+      out.add(Attachment(im == null ? bytes : turned(im)));
     } else {
-      out.add(Attachment(bytes, caption));
+      out.add(Attachment(bytes));
     }
   }
   final exps = [for (final e in ws['expenses'] as List) if (e['att'] != null) e]..sort((a, b) => (a['day'] as num).compareTo(b['day'] as num));
-  for (final e in exps) {
-    final i = (e['day'] as num).toInt(), amt = money(e['amount']);
-    await add(e['att'] as Map, '${dayNames[i]} ${fmtShort(addDays(sun, i))} - ${expenseTypes[e['type']] ?? ''}'
-        '${(e['note'] ?? '').toString().isNotEmpty ? ' (${e['note']})' : ''}${amt != 0 ? ' - £${amt.toStringAsFixed(2)}' : ''}');
-  }
-  for (final a in ws['other'] as List) { await add(a as Map, (a['caption'] ?? '').toString()); }
+  for (final e in exps) { await add(e['att'] as Map); }
+  for (final a in ws['other'] as List) { await add(a as Map); }
   return out;
 }
 

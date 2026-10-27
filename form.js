@@ -345,13 +345,10 @@
       pages.forEach((p) => doc.addPage(p));
       return;
     }
+    // The scan is the page: A4 wide, as tall as the picture, no margin and no text.
     const img = att.mime === 'image/png' ? await doc.embedPng(att.bytes) : await doc.embedJpg(att.bytes);
-    const land = img.width > img.height * 1.15, size = land ? A4L : A4P;
-    const page = doc.addPage(size), m = 28, capH = att.caption ? 18 : 0;
-    const k = Math.min((size[0] - 2 * m) / img.width, (size[1] - 2 * m - capH) / img.height);
-    const w = img.width * k, h = img.height * k;
-    page.drawImage(img, { x: (size[0] - w) / 2, y: m + (size[1] - 2 * m - capH - h) / 2, width: w, height: h });
-    if (att.caption) page.drawText(att.caption.replace(/[^\x20-\x7E\xA0-\xFF£]/g, ''), { x: m, y: size[1] - m - 10, size: 10, font: fonts.bold, color: INK });
+    const pw = img.width > img.height * 1.15 ? A4L[0] : A4P[0], ph = pw * img.height / img.width;
+    doc.addPage([pw, ph]).drawImage(img, { x: 0, y: 0, width: pw, height: ph });
   }
 
   async function build(data, opts = {}) {

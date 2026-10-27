@@ -52,8 +52,8 @@ class P2Data {
       this.signature, this.rows = const [], this.totals = const P2Totals()});
 }
 
-/// A receipt or other page to append: an image (JPEG/PNG) with an optional caption.
-class Attachment { final Uint8List bytes; final String caption; const Attachment(this.bytes, [this.caption = '']); }
+/// A receipt or other page to append: an image (JPEG/PNG), shown on its own with no text.
+class Attachment { final Uint8List bytes; const Attachment(this.bytes); }
 
 class _Fonts { final PdfFont reg, bold, times, timesBold; _Fonts(this.reg, this.bold, this.times, this.timesBold); }
 
@@ -400,16 +400,20 @@ void _page2(PdfDocument doc, _Fonts fonts, P2Data d) {
 }
 
 // ---- attachments -------------------------------------------------------------------
-void _attach(PdfDocument doc, _Fonts fonts, Attachment att, bool forPrint) {
+// The scan is the page: no margin, no text (the scanner already cropped it to the paper).
+void _attach(PdfDocument doc, Attachment att, bool forPrint) {
   final img = PdfImage.file(doc, bytes: att.bytes);
-  final land = img.width > img.height * 1.15, size = land ? _a4l : _a4p;
-  final g = land && forPrint ? _turnedSheet(doc) : PdfPage(doc, pageFormat: size).getGraphics();
-  const m = 28.0;
-  final capH = att.caption.isNotEmpty ? 18.0 : 0.0;
-  final k1 = (size.width - 2 * m) / img.width, k2 = (size.height - 2 * m - capH) / img.height, k = k1 < k2 ? k1 : k2;
+  final land = img.width > img.height * 1.15;
+  if (!forPrint) { // A4 wide, as tall as the picture
+    final pw = land ? _a4l.width : _a4p.width, ph = pw * img.height / img.width;
+    PdfPage(doc, pageFormat: PdfPageFormat(pw, ph)).getGraphics().drawImage(img, 0, 0, pw, ph);
+    return;
+  }
+  // Printing: an A4 sheet with the picture as big as it fits (landscape pictures turned, see _turnedSheet).
+  final size = land ? _a4l : _a4p, g = land ? _turnedSheet(doc) : PdfPage(doc, pageFormat: _a4p).getGraphics();
+  final k1 = size.width / img.width, k2 = size.height / img.height, k = k1 < k2 ? k1 : k2;
   final w = img.width * k, h = img.height * k;
-  g.drawImage(img, (size.width - w) / 2, m + (size.height - 2 * m - capH - h) / 2, w, h);
-  if (att.caption.isNotEmpty) { g.setFillColor(_ink); g.drawString(fonts.bold, 10, att.caption.replaceAll(_notLatin, ''), m, size.height - m - 10); }
+  g.drawImage(img, (size.width - w) / 2, (size.height - h) / 2, w, h);
 }
 
 /// Builds the PDF. Attachments that fail to decode are skipped.
@@ -421,7 +425,7 @@ Future<Uint8List> buildTimesheet({P1Data p1 = const P1Data(), P2Data p2 = const 
   _page1(doc, fonts, p1, logo, forPrint);
   if (page2) _page2(doc, fonts, p2);
   for (final a in attachments) {
-    try { _attach(doc, fonts, a, forPrint); } catch (_) { /* skip a broken image */ }
+    try { _attach(doc, a, forPrint); } catch (_) { /* skip a broken image */ }
   }
   return doc.save();
 }

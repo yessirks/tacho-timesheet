@@ -1,7 +1,7 @@
 // Diary: what you did each day (places, drops, pickups, coupling, expenses). What you write here always wins over the tacho.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../core/tacho.dart' show Fix;
+import '../core/tacho.dart' show Fix, LatLon;
 import '../core/week.dart';
 import '../data/store.dart';
 import 'common.dart';
@@ -214,14 +214,24 @@ class StopsEditor extends StatelessWidget {
   final String date;
   const StopsEditor({super.key, required this.date});
 
-  static const _icons = {'pickup': '⬆', 'couple': '🔗', 'uncouple': '✂', 'other': '•'};
+  /// Add a stop: pick where (places you were at that day, or around you now), or add it unnamed for now.
+  Future<void> _add(BuildContext context, String type) async {
+    final endT = store.trailerBefore(date, store.stopsOn(date).length);
+    const titles = {'drop': 'Where was the drop?', 'pickup': 'Where was the pickup?', 'couple': 'Where did you couple?', 'uncouple': 'Where did you uncouple?'};
+    final p = await locatePicker(context, titles[type] ?? 'Where?', date: date, allowLater: true);
+    if (p == null) return;
+    store.addStopTo(date, {
+      'type': type, 'name': p.name, if (p.lat != null) 'lat': p.lat, if (p.lon != null) 'lon': p.lon,
+      if (type == 'uncouple' && endT != null) 'ref': endT.ref,
+    }, keepEmpty: p.name.isEmpty);
+    if (type == 'couple' && context.mounted) toast(context, 'Type the trailer number on the Couple line');
+  }
 
   @override
   Widget build(BuildContext context) {
     final l = store.stopsOn(date), endT = store.trailerBefore(date, l.length);
     void save(List<J> x) => store.setStops(date, x);
     var drops = 0;
-    final cs = Theme.of(context).colorScheme;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (endT != null)
         Container(
@@ -232,7 +242,7 @@ class StopsEditor extends StatelessWidget {
               const TextSpan(text: '🚛 Trailer '), TextSpan(text: endT.ref, style: const TextStyle(fontWeight: FontWeight.w800)),
               TextSpan(text: ' coupled${endT.date != date ? ' since ${dayNames[dayIdx(endT.date)].substring(0, 3)} ${fmtDay(endT.date)}' : ''}${endT.at.isNotEmpty ? ' at ${endT.at}' : ''}'),
             ]))),
-            TextButton(onPressed: () => save([...l, {'type': 'uncouple', 'name': '', 'ref': endT.ref}]), child: Text('✂ Uncouple ${endT.ref}')),
+            TextButton.icon(onPressed: () => _add(context, 'uncouple'), icon: const Icon(Icons.link_off_rounded, size: 18), label: Text('Uncouple ${endT.ref}')),
           ]),
         ),
       if (l.isEmpty) Padding(padding: const EdgeInsets.only(bottom: 6), child: Text('Nothing added yet.', style: TextStyle(color: mutedColor(context)))),
@@ -241,10 +251,7 @@ class StopsEditor extends StatelessWidget {
           key: ValueKey('$date-$n'),
           padding: const EdgeInsets.only(bottom: 10),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Padding(padding: const EdgeInsets.only(top: 8), child: CircleAvatar(
-              radius: 14, backgroundColor: l[n]['type'] == 'drop' ? orange : cs.secondaryContainer,
-              child: Text(l[n]['type'] == 'drop' ? '${++drops}' : _icons[l[n]['type']] ?? '•', style: TextStyle(color: l[n]['type'] == 'drop' ? Colors.white : cs.onSecondaryContainer, fontWeight: FontWeight.w800, fontSize: 13)),
-            )),
+            Padding(padding: const EdgeInsets.only(top: 6), child: StopBadge(type: (l[n]['type'] ?? 'drop') as String, number: l[n]['type'] == 'drop' ? ++drops : null)),
             const SizedBox(width: 8),
             Expanded(child: Column(children: [
               Row(children: [
@@ -280,13 +287,14 @@ class StopsEditor extends StatelessWidget {
             ])),
           ]),
         ),
-      Wrap(spacing: 6, runSpacing: 6, children: [
-        for (final t in ['drop', 'pickup', 'couple', 'uncouple'])
-          ActionChip(avatar: const Icon(Icons.add, size: 16), label: Text(stopTypes[t]!), onPressed: () {
-            save([...l, {'type': t, 'name': '', if (t == 'uncouple' && endT != null) 'ref': endT.ref}]);
-          }),
-        ActionChip(avatar: const Icon(Icons.repeat, size: 16), label: const Text('Same as another day'), onPressed: () => _copyDay(context)),
+      const SizedBox(height: 4),
+      Row(children: [
+        for (final t in ['drop', 'pickup', 'couple', 'uncouple']) ...[
+          if (t != 'drop') const SizedBox(width: 8),
+          Expanded(child: _AddTile(type: t, onTap: () => _add(context, t))),
+        ],
       ]),
+      Align(alignment: Alignment.centerLeft, child: TextButton.icon(onPressed: () => _copyDay(context), icon: const Icon(Icons.repeat_rounded, size: 18), label: const Text('Same as another day'))),
     ]);
   }
 
@@ -311,7 +319,55 @@ class StopsEditor extends StatelessWidget {
   }
 }
 
-// Stops you've used before, most used first, for one-tap entry. Hold one to rename, hide or star it.
+// ---- look of the stop types: colour and icon, used by the add buttons and the numbered badges ----
+const stopLook = {
+  'drop': (Color(0xFFFF8A4C), Color(0xFFE5532A), Icons.move_to_inbox_rounded),
+  'pickup': (Color(0xFF2DD4BF), Color(0xFF0F766E), Icons.outbox_rounded),
+  'couple': (Color(0xFFA78BFA), Color(0xFF6D28D9), Icons.link_rounded),
+  'uncouple': (Color(0xFF94A3B8), Color(0xFF475569), Icons.link_off_rounded),
+  'other': (Color(0xFF94A3B8), Color(0xFF64748B), Icons.place_rounded),
+};
+
+class _AddTile extends StatelessWidget {
+  final String type; final VoidCallback onTap;
+  const _AddTile({required this.type, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final (a, b, icon) = stopLook[type]!;
+    return Material(
+      borderRadius: BorderRadius.circular(18), clipBehavior: Clip.antiAlias, elevation: 2, shadowColor: b.withValues(alpha: .5),
+      child: Ink(
+        decoration: BoxDecoration(gradient: LinearGradient(colors: [a, b], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+        child: InkWell(onTap: onTap, child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 38, height: 38, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .22), shape: BoxShape.circle),
+                child: Icon(icon, color: Colors.white, size: 22)),
+            const SizedBox(height: 6),
+            Text(stopTypes[type]!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+          ]),
+        )),
+      ),
+    );
+  }
+}
+
+/// Round badge in front of a stop: drops are numbered, the others show their icon.
+class StopBadge extends StatelessWidget {
+  final String type; final int? number;
+  const StopBadge({super.key, required this.type, this.number});
+  @override
+  Widget build(BuildContext context) {
+    final (a, b, icon) = stopLook[type] ?? stopLook['other']!;
+    return Container(
+      width: 30, height: 30, alignment: Alignment.center,
+      decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [a, b], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+      child: number != null ? Text('$number', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)) : Icon(icon, color: Colors.white, size: 17),
+    );
+  }
+}
+
+// Places right around you that you've used or starred, for one-tap entry (today only). Hold one to rename, hide or star it.
 class _FrequentChips extends StatefulWidget {
   final String date;
   const _FrequentChips({required this.date});
@@ -323,10 +379,22 @@ class _FrequentChipsState extends State<_FrequentChips> {
   bool all = false;
   @override
   Widget build(BuildContext context) {
-    final freq = store.frequentStops();
-    if (freq.isEmpty) return Text('Names you add show up here for next time.', style: TextStyle(color: mutedColor(context), fontSize: 13));
+    final me = store.lastPos;
+    if (widget.date != todayKey() || me == null) return const SizedBox();
+    final already = {for (final x in store.stopsOn(widget.date)) (x['name'] ?? '').toString().toLowerCase()};
+    final used = store.frequentStops();
+    double away(double? lat, double? lon) => lat == null || lon == null ? double.infinity : distKm(LatLon(me.lat, me.lon), LatLon(lat, lon));
+    final freq = [
+      for (final f in used) if (away(f.lat, f.lon) <= 3 && !already.contains(f.name.toLowerCase())) f,
+      for (final st in store.stars)
+        if (away(numOf(st['lat']), numOf(st['lon'])) <= 3 && !already.contains((st['name'] ?? '').toString().toLowerCase()) &&
+            !used.any((f) => f.name.toLowerCase() == (st['name'] ?? '').toString().toLowerCase()))
+          (type: 'drop', name: (st['name'] ?? '') as String, c: 0, lat: numOf(st['lat']) as double?, lon: numOf(st['lon']) as double?),
+    ]..sort((a, b) => away(a.lat, a.lon).compareTo(away(b.lat, b.lon)));
+    if (freq.isEmpty) return const SizedBox();
     final shown = all ? freq : freq.take(8).toList();
-    return Wrap(spacing: 6, runSpacing: 6, children: [
+    return Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      Text('Near you:', style: TextStyle(color: mutedColor(context), fontWeight: FontWeight.w700, fontSize: 13)),
       for (final s in shown)
         GestureDetector(
           onLongPress: () { HapticFeedback.mediumImpact(); _menu(context, s); },

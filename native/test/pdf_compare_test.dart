@@ -33,7 +33,9 @@ void main() {
     if (env['TUKI_PDF_PRINT'] != null) { // the print layout, with a wide picture as a landscape receipt
       final logo = File('assets/cbt_logo.png').readAsBytesSync();
       File(env['TUKI_PDF_PRINT']!).writeAsBytesSync(await buildTimesheet(logo: logo, forPrint: true, p1: const P1Data(name: 'Print test'),
-          attachments: [Attachment(logo, 'Wide receipt'), Attachment(sig, 'Signature as a receipt')]));
+          attachments: [Attachment(logo), Attachment(sig)]));
+      File('${env['TUKI_PDF_PRINT']!}.email.pdf').writeAsBytesSync(await buildTimesheet(logo: logo, p1: const P1Data(name: 'Email test'),
+          attachments: [Attachment(logo), Attachment(sig)]));
     }
   }, skip: env['TUKI_SAMPLE'] == null ? 'set TUKI_SAMPLE, TUKI_SIG and TUKI_PDF' : false);
 }

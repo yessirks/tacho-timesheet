@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import '../core/geo.dart' as geo;
+import '../core/week.dart' show todayKey;
 import '../data/store.dart';
 
 AppStore get store => AppStore.I;
@@ -229,12 +230,14 @@ class _PlaceFieldState extends State<PlaceField> {
 // ---- 📍 "where am I?" picker: starred spots, saved places, shops and depots nearby, the town ----------
 class Picked { final String name; final double? lat, lon; Picked(this.name, [this.lat, this.lon]); }
 
-Future<Picked?> locatePicker(BuildContext context, String title, {bool offerStar = true}) =>
-    sheet<Picked>(context, (c) => _LocatePicker(title: title, offerStar: offerStar));
+/// `date`: also list the places you were at that day (phone and tacho GPS); for a past day only those, since
+/// where you are now doesn't matter then. `allowLater`: offer adding it without a name (returns an empty name).
+Future<Picked?> locatePicker(BuildContext context, String title, {bool offerStar = true, String? date, bool allowLater = false}) =>
+    sheet<Picked>(context, (c) => _LocatePicker(title: title, offerStar: offerStar, date: date, allowLater: allowLater));
 
 class _LocatePicker extends StatefulWidget {
-  final String title; final bool offerStar;
-  const _LocatePicker({required this.title, required this.offerStar});
+  final String title; final bool offerStar, allowLater; final String? date;
+  const _LocatePicker({required this.title, required this.offerStar, this.date, this.allowLater = false});
   @override
   State<_LocatePicker> createState() => _LocatePickerState();
 }
@@ -251,7 +254,21 @@ class _LocatePickerState extends State<_LocatePicker> {
   void _add(_Item it) { if (seen.add(it.name.toLowerCase())) items.add(it); }
 
   @override
-  void initState() { super.initState(); _run(); }
+  void initState() {
+    super.initState();
+    final d = widget.date;
+    if (d != null) {
+      for (final v in store.nearbyFor(d)) {
+        _add(_Item(v.name, '${v.src == 'phone' ? '📱 you were here' : '🚚 tacho GPS'} · ${v.time}', lat: v.lat, lon: v.lon, exact: true));
+      }
+      if (d != todayKey()) { // a past day: only where you actually were
+        searching = false;
+        status = items.isEmpty ? 'No visits to your places recorded that day. Type the name:' : 'Places you were at that day:';
+        return;
+      }
+    }
+    _run();
+  }
 
   Future<void> _run() async {
     try { pos = await getHere(); } catch (e) { if (mounted) setState(() { status = '$e You can still type a name.'; searching = false; }); return; }
@@ -261,6 +278,12 @@ class _LocatePickerState extends State<_LocatePicker> {
     for (final x in starred) { _add(_Item(x.s['name'], '⭐ starred · ${geo.fmtDist(x.d)}', lat: numOf(x.s['lat']), lon: numOf(x.s['lon']), exact: true)); }
     final sp = store.savedAt(p.ll);
     if (sp != null && (sp['name'] ?? '').toString().isNotEmpty) _add(_Item(sp['name'], 'saved place'));
+    // Names from your diary that you used right here before.
+    for (final f in store.frequentStops()) {
+      if (f.lat == null) continue;
+      final d = geo.distM(p.lat, p.lon, f.lat!, f.lon!);
+      if (d <= 400) _add(_Item(f.name, '🕘 used ${f.c}× · ${geo.fmtDist(d)}', lat: f.lat, lon: f.lon, exact: true));
+    }
     setState(() => status = 'Found you (±${p.acc.round()} m). Looking for shops and depots nearby…');
     await _nearby(p);
   }
@@ -318,6 +341,8 @@ class _LocatePickerState extends State<_LocatePicker> {
           const SizedBox(width: 8),
           FilledButton(onPressed: () => _pick(own.text), child: const Text('Use')),
         ]),
+        if (widget.allowLater)
+          Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: () => Navigator.pop(context, Picked('')), child: const Text('Add it without a name for now'))),
         if (widget.offerStar)
           CheckboxListTile(contentPadding: EdgeInsets.zero, value: star, onChanged: (v) => setState(() => star = v ?? false),
               title: const Text('⭐ Also star this exact spot (for sat-nav)'), controlAffinity: ListTileControlAffinity.leading, dense: true),

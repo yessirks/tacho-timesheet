@@ -137,13 +137,13 @@ class _SheetTabState extends State<SheetTab> {
                 Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [
                   AttThumb(a),
                   const SizedBox(width: 8),
-                  Expanded(child: SyncedField(value: (a['caption'] ?? '').toString(), hint: 'Caption (optional)', onChanged: (v) { a['caption'] = v; store.changed(); })),
+                  Expanded(child: Text((a['name'] ?? 'Page').toString(), maxLines: 1, overflow: TextOverflow.ellipsis)),
                   IconButton(icon: const Icon(Icons.close), onPressed: () => store.removeOther(sun, a)),
                 ])),
               Align(alignment: Alignment.centerLeft, child: ActionChip(avatar: const Icon(Icons.attach_file, size: 16), label: const Text('Attach a page (photo or PDF)'), onPressed: () async {
                 final holder = <String, dynamic>{};
                 if (await attachInto(context, holder, read: false) == null) return;
-                (store.weekState(sun)['other'] as List).add({...holder['att'] as J, 'caption': ''});
+                (store.weekState(sun)['other'] as List).add({...holder['att'] as J});
                 store.changed();
               })),
             ]))),
