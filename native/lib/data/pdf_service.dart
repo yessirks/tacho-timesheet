@@ -78,7 +78,8 @@ Future<List<Attachment>> _attachments(AppStore s, String sun) async {
   return out;
 }
 
-Future<Uint8List> buildWeekPdf(AppStore s, String sun, {bool withAttachments = true}) async {
+/// `forPrint`: every sheet portrait, landscape pages turned (for the print button; emailed PDFs keep their shapes).
+Future<Uint8List> buildWeekPdf(AppStore s, String sun, {bool withAttachments = true, bool forPrint = false}) async {
   _logo ??= (await rootBundle.load('assets/cbt_logo.png')).buffer.asUint8List();
   String f(String k) => s.footVal(sun, k);
   final sig = s.signatureBytes;
@@ -86,6 +87,7 @@ Future<Uint8List> buildWeekPdf(AppStore s, String sun, {bool withAttachments = t
   return buildTimesheet(
     logo: _logo,
     page2: f('page2') != 'no',
+    forPrint: forPrint,
     p1: P1Data(
       name: f('name'), weekCommencing: f('weekCommencing'), totalWeekdays: f('totalWeekdays'), totalWeekendDays: f('totalWeekendDays'),
       away24: f('away24'), declaration: f('declaration'), signature: sig,

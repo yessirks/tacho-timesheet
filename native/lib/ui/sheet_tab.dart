@@ -2,6 +2,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:pdf/pdf.dart' show PdfPageFormat;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import '../core/tacho.dart' show Fix;
@@ -60,10 +61,14 @@ class _SheetTabState extends State<SheetTab> {
         if (r.status != ShareResultStatus.dismissed) { store.markDone(sun, 'shared'); if (mounted) toast(context, '✓ Shared ${store.fileName(sun)}'); }
       });
 
+  /// Printers get every page portrait (landscape ones turned), or Android squeezes them onto one orientation.
+  Future<void> printWeek() => Printing.layoutPdf(name: store.fileName(sun), format: PdfPageFormat.a4, onLayout: (_) => buildWeekPdf(store, sun, forPrint: true));
+
   void preview() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(
         appBar: AppBar(title: Text(store.fileName(sun))),
         body: PdfPreview(build: (_) => buildWeekPdf(store, sun), canChangeOrientation: false, canChangePageFormat: false, canDebug: false,
-            pdfFileName: store.fileName(sun), allowPrinting: true, allowSharing: true),
+            pdfFileName: store.fileName(sun), allowPrinting: false, allowSharing: true,
+            actions: [PdfPreviewAction(icon: const Icon(Icons.print), onPressed: (_, _, _) => printWeek())]),
       )));
 
   @override

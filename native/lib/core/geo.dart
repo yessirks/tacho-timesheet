@@ -275,39 +275,60 @@ List<PlaceIO> parseImport(String text) {
 
 // ---- shared text / short Google Maps links ----------------------------------------------
 final _urlRe = RegExp(r'https?://\S+');
+final _postcodeRe = RegExp(r'\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b', caseSensitive: false);
 
-/// A place out of text shared from Google Maps (or anything with coordinates in it). Short links
-/// (maps.app.goo.gl) are followed to the full link, which has the pin's coordinates. Null if none found
-/// (e.g. a link to a search rather than a place).
-Future<Coords?> coordsFromShare(String text) async {
+/// A place shared from Google Maps. `approx` = found from its address, so the exact gate still needs placing.
+class SharedPlace { final double lat, lon; final String name; final bool approx; SharedPlace(this.lat, this.lon, this.name, {this.approx = false}); }
+
+/// "Unit 9, Kepak Foods, Cooksland Industrial Estate, Bodmin PL31 2QB" -> "Kepak Foods Bodmin".
+String shortPlaceName(String full) {
+  final parts = full.split(',').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) return '';
+  final name = parts.firstWhere((p) => !RegExp(r'^(unit|units|plot|bay|\d)', caseSensitive: false).hasMatch(p), orElse: () => parts.first);
+  final town = parts.length > 1 ? parts.last.replaceAll(_postcodeRe, '').trim() : '';
+  return town.isNotEmpty && !name.toLowerCase().contains(town.toLowerCase()) && name != parts.last ? '$name $town' : name;
+}
+
+/// A place out of text shared from Google Maps (or anything with coordinates in it). Short links (maps.app.goo.gl)
+/// are followed: when the full link has the pin's coordinates they're used; otherwise the place's postcode (or name)
+/// is looked up on OpenStreetMap and marked approximate. Null if nothing usable was found.
+Future<SharedPlace?> placeFromShare(String text) async {
   final lines = text.split(RegExp(r'\r?\n')).map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
   // Google Maps shares "Place name\nAddress\nhttps://maps.app.goo.gl/…": the first line is the name.
   final firstLine = lines.isNotEmpty && !_urlRe.hasMatch(lines.first) ? lines.first : '';
-  Coords named(Coords c) => Coords(c.lat, c.lon, c.name.isNotEmpty ? c.name : firstLine);
+  var placeName = '', address = lines.where((l) => !_urlRe.hasMatch(l)).join(', ');
+  SharedPlace exact(Coords c) => SharedPlace(c.lat, c.lon, c.name.isNotEmpty ? shortPlaceName(c.name) : firstLine);
   final direct = parseCoords(text);
-  if (direct != null) return named(direct);
+  if (direct != null) return exact(direct);
   final url = _urlRe.firstMatch(text)?[0];
-  if (url == null) return null;
-  final client = http.Client();
-  try {
-    var next = Uri.parse(url);
-    for (var hop = 0; hop < 8; hop++) {
-      final req = http.Request('GET', next)..followRedirects = false..headers.addAll(_ua);
-      final res = await client.send(req).timeout(const Duration(seconds: 10));
-      final loc = res.headers['location'];
-      // Only a link that carries the pin counts: the page itself shows the map around *you*, not the place.
-      if (loc == null) { await res.stream.drain<void>(); return null; }
-      await res.stream.drain<void>();
-      next = next.resolve(loc);
-      // The UK consent page carries the real link in "continue".
-      final target = next.queryParameters['continue'] ?? next.toString();
-      final c = parseCoords(Uri.decodeFull(target));
-      if (c != null) return named(c);
-    }
-    return null;
-  } catch (_) {
-    return null;
-  } finally {
-    client.close();
+  if (url != null) {
+    final client = http.Client();
+    try {
+      var next = Uri.parse(url);
+      for (var hop = 0; hop < 6; hop++) {
+        final target = Uri.decodeFull(next.queryParameters['continue'] ?? next.toString());
+        final c = parseCoords(target);
+        if (c != null) return exact(c);
+        final m = RegExp(r'/place/([^/@?]+)').firstMatch(target);
+        if (m != null) placeName = Uri.decodeComponent(m[1]!.replaceAll('+', ' '));
+        if (next.host.startsWith('consent.')) break; // Google's cookie page: the link above is all we get
+        final req = http.Request('GET', next)..followRedirects = false..headers.addAll(_ua);
+        final res = await client.send(req).timeout(const Duration(seconds: 10));
+        await res.stream.drain<void>();
+        final loc = res.headers['location'];
+        if (loc == null) break; // the page itself shows the map around *you*, so it's never read
+        next = next.resolve(loc);
+      }
+    } catch (_) { /* offline or blocked: fall through to the address */ } finally { client.close(); }
   }
+  // No pin in the link: find it from the postcode (precise in the UK), else the name.
+  final full = placeName.isNotEmpty ? placeName : address;
+  if (full.isEmpty) return null;
+  final pc = _postcodeRe.firstMatch(full);
+  final name = firstLine.isNotEmpty ? firstLine : shortPlaceName(full);
+  try {
+    final hits = await search(pc != null ? '${pc[1]!.toUpperCase()} ${pc[2]!.toUpperCase()}' : full);
+    if (hits.isNotEmpty) return SharedPlace(hits.first.lat, hits.first.lon, name, approx: true);
+  } catch (_) {}
+  return null;
 }

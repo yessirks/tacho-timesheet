@@ -8,7 +8,8 @@ import '../core/tacho.dart' show parseCard;
 import '../core/week.dart';
 import '../data/store.dart';
 import 'common.dart';
-import 'map_tab.dart' show starEditor;
+import 'package:latlong2/latlong.dart';
+import 'map_tab.dart' show starEditor, pinMap;
 import 'receipts.dart' show autoReadInto;
 
 Future<void> handleIncoming(BuildContext context, Map item, {required void Function(String sunday) openWeek, required void Function(String date) openDay, required VoidCallback openMap}) async {
@@ -16,14 +17,20 @@ Future<void> handleIncoming(BuildContext context, Map item, {required void Funct
   final text = item['text'] as String?;
   if (text != null) {
     toast(context, 'Reading the link…');
-    final c = await geo.coordsFromShare(text);
+    final c = await geo.placeFromShare(text);
     if (!context.mounted) return;
     if (c == null) {
-      alert(context, "That link doesn't have the exact spot in it. In Google Maps, press and hold the spot (a red pin appears), then Share that pin to Tuki.");
+      alert(context, "Tuki couldn't find that place. In Google Maps, press and hold the spot (a red pin appears), then Share that pin to Tuki.");
       return;
     }
     openMap();
-    await starEditor(context, {'name': c.name, 'lat': c.lat, 'lon': c.lon});
+    var lat = c.lat, lon = c.lon;
+    if (c.approx) { // Google didn't send the exact spot: let the driver put the pin on the gate
+      final spot = await pinMap(context, LatLng(lat, lon), 17, '${c.name.isEmpty ? 'Found it' : c.name}: put the pin on the gate');
+      if (spot == null || !context.mounted) return;
+      lat = spot.latitude; lon = spot.longitude;
+    }
+    await starEditor(context, {'name': c.name, 'lat': lat, 'lon': lon});
     return;
   }
   final bytes = item['bytes'] as Uint8List?;

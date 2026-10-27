@@ -3,10 +3,19 @@
 // Layout numbers are in "scan pixels" measured from the original paper form and mapped to A4.
 import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
+import 'package:vector_math/vector_math_64.dart' show Matrix4;
 
 const _ink = PdfColor(0, 0, 0);
 const _fill = PdfColor(0.06, 0.17, 0.5); // filled-in values: dark blue, like a biro
 const _a4l = PdfPageFormat(841.89, 595.28), _a4p = PdfPageFormat(595.28, 841.89);
+
+/// For printing: a portrait A4 sheet with a landscape page drawn on it turned a quarter (top edge on the left),
+/// because Android's print system puts every page on one paper orientation.
+PdfGraphics _turnedSheet(PdfDocument doc) {
+  final g = PdfPage(doc, pageFormat: _a4p).getGraphics();
+  g.setTransform(Matrix4(0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, _a4p.width, 0, 0, 1)); // (x, y) -> (W - y, x)
+  return g;
+}
 
 class P1Day {
   final String startTime, finishTime, startPlace, finishPlace, drops, nightOut, driving;
@@ -55,10 +64,13 @@ String _clean(String t) => t.replaceAll(_quotes, "'").replaceAll(_dquotes, '"').
 double _tw(PdfFont f, String t, double size) => t.isEmpty ? 0 : f.stringMetrics(t).advanceWidth * size;
 
 class _Ctx {
-  final PdfDocument doc; final PdfPage page; final PdfGraphics g; final _Fonts fonts;
+  final PdfDocument doc; final PdfGraphics g; final _Fonts fonts;
   final double s, cx, cy, ox, oy, h;
-  _Ctx(this.doc, this.page, this.fonts, {required this.s, required this.cx, required this.cy, required this.ox, required this.oy})
+  _Ctx(this.doc, PdfPage page, this.fonts, {required this.s, required this.cx, required this.cy, required this.ox, required this.oy})
       : g = page.getGraphics(), h = page.pageFormat.height;
+  /// Draws a landscape page turned onto a portrait sheet (see _turnedSheet).
+  _Ctx.turned(this.doc, this.fonts, {required this.s, required this.cx, required this.cy, required this.ox, required this.oy})
+      : g = _turnedSheet(doc), h = _a4l.height;
 
   double X(double px) => ox + (px - cx) * s;
   double Y(double py) => h - (oy + (py - cy) * s);
@@ -167,9 +179,9 @@ const _p1Cols = [105.0, 213.0, 457.0, 865.0, 1210.0, 1298.0, 1387.0];
 const _p1Top = 110.0, _p1Head = 148.0, _p1RowH = 100.57;
 const _p1Days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-void _page1(PdfDocument doc, _Fonts fonts, P1Data d, Uint8List? logo) {
-  final page = PdfPage(doc, pageFormat: _a4l);
-  final c = _Ctx(doc, page, fonts, s: 0.57, cx: 746, cy: 526, ox: _a4l.width / 2, oy: _a4l.height / 2);
+void _page1(PdfDocument doc, _Fonts fonts, P1Data d, Uint8List? logo, bool forPrint) {
+  final c = forPrint ? _Ctx.turned(doc, fonts, s: 0.57, cx: 746, cy: 526, ox: _a4l.width / 2, oy: _a4l.height / 2)
+      : _Ctx(doc, PdfPage(doc, pageFormat: _a4l), fonts, s: 0.57, cx: 746, cy: 526, ox: _a4l.width / 2, oy: _a4l.height / 2);
   final b = fonts.bold, r = fonts.reg, cols = _p1Cols;
   const bottom = _p1Head + _p1RowH * 7;
 
@@ -388,10 +400,10 @@ void _page2(PdfDocument doc, _Fonts fonts, P2Data d) {
 }
 
 // ---- attachments -------------------------------------------------------------------
-void _attach(PdfDocument doc, _Fonts fonts, Attachment att) {
+void _attach(PdfDocument doc, _Fonts fonts, Attachment att, bool forPrint) {
   final img = PdfImage.file(doc, bytes: att.bytes);
   final land = img.width > img.height * 1.15, size = land ? _a4l : _a4p;
-  final page = PdfPage(doc, pageFormat: size), g = page.getGraphics();
+  final g = land && forPrint ? _turnedSheet(doc) : PdfPage(doc, pageFormat: size).getGraphics();
   const m = 28.0;
   final capH = att.caption.isNotEmpty ? 18.0 : 0.0;
   final k1 = (size.width - 2 * m) / img.width, k2 = (size.height - 2 * m - capH) / img.height, k = k1 < k2 ? k1 : k2;
@@ -402,14 +414,14 @@ void _attach(PdfDocument doc, _Fonts fonts, Attachment att) {
 
 /// Builds the PDF. Attachments that fail to decode are skipped.
 Future<Uint8List> buildTimesheet({P1Data p1 = const P1Data(), P2Data p2 = const P2Data(), bool page2 = true,
-    List<Attachment> attachments = const [], Uint8List? logo}) async {
+    List<Attachment> attachments = const [], Uint8List? logo, bool forPrint = false}) async {
   final doc = PdfDocument();
   PdfInfo(doc, title: 'Weekly Timesheet${p1.weekCommencing.isNotEmpty ? ' - w/c ${p1.weekCommencing}' : ''}', creator: 'Tuki', producer: 'Tuki');
   final fonts = _Fonts(PdfFont.helvetica(doc), PdfFont.helveticaBold(doc), PdfFont.times(doc), PdfFont.timesBold(doc));
-  _page1(doc, fonts, p1, logo);
+  _page1(doc, fonts, p1, logo, forPrint);
   if (page2) _page2(doc, fonts, p2);
   for (final a in attachments) {
-    try { _attach(doc, fonts, a); } catch (_) { /* skip a broken image */ }
+    try { _attach(doc, fonts, a, forPrint); } catch (_) { /* skip a broken image */ }
   }
   return doc.save();
 }

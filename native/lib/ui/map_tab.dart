@@ -190,8 +190,9 @@ class _MapTabState extends State<MapTab> {
                 MarkerLayer(markers: [
                   for (final s in store.stars)
                     if (hasLL(s))
-                      Marker(point: LatLng(numOf(s['lat']), numOf(s['lon'])), width: 34, height: 34, alignment: Alignment.topCenter,
-                          child: GestureDetector(onTap: () => _starSheet(s), child: const Icon(Icons.location_on, color: orange, size: 34, shadows: [Shadow(blurRadius: 4, color: Colors.black38)]))),
+                      // The box is centred on the spot and the pin fills its top half, so the tip is on the coordinate.
+                      Marker(point: LatLng(numOf(s['lat']), numOf(s['lon'])), width: 150, height: 80, alignment: Alignment.center,
+                          child: Align(alignment: Alignment.topCenter, child: GestureDetector(onTap: () => _starSheet(s), child: StarPin(name: s['name'] ?? '')))),
                 ]),
               if (me != null) ...[
                 CircleLayer(circles: [CircleMarker(point: LatLng(me.lat, me.lon), radius: me.acc, useRadiusInMeter: true, color: Colors.blue.withValues(alpha: .1), borderColor: Colors.blue, borderStrokeWidth: 1)]),
@@ -498,4 +499,26 @@ class _Way extends StatelessWidget {
           Icon(icon, color: orange), const SizedBox(height: 6), Text(title, style: const TextStyle(fontWeight: FontWeight.w800)), Text(sub, style: TextStyle(color: mutedColor(context), fontSize: 12)),
         ]))),
       );
+}
+
+/// A starred place on the map: an orange pin with a white star, and its name once you zoom in.
+class StarPin extends StatelessWidget {
+  final String name;
+  const StarPin({super.key, required this.name});
+  @override
+  Widget build(BuildContext context) {
+    final zoom = MapCamera.maybeOf(context)?.zoom ?? 0;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Stack(alignment: const Alignment(0, -0.3), children: [
+        const Icon(Icons.location_on, color: orange, size: 40, shadows: [Shadow(blurRadius: 4, color: Colors.black45)]),
+        const Icon(Icons.star_rounded, color: Colors.white, size: 17),
+      ]),
+      if (zoom >= 14 && name.isNotEmpty)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: .92), borderRadius: BorderRadius.circular(8), boxShadow: const [BoxShadow(blurRadius: 3, color: Colors.black26)]),
+          child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: navy)),
+        ),
+    ]);
+  }
 }
