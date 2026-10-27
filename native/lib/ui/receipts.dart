@@ -1,9 +1,9 @@
 // Receipts: scan with Google's on-device document scanner (finds the paper, straightens it, several pages
 // for long receipts), read the total with on-device text recognition, or attach a photo / PDF.
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as img;
@@ -53,7 +53,9 @@ Future<String?> scanInto(BuildContext context, J e) async {
     store.changed();
     return await _autoRead(e, store.attFile(e['att'])!.path);
   } catch (err) {
-    if (context.mounted) alert(context, 'The scanner could not start: $err');
+    // Keep it short: the first line of the error, not the whole Java stack.
+    final why = (err is PlatformException ? (err.message ?? err.code) : '$err').split('\n').first;
+    if (context.mounted) alert(context, "The scanner couldn't start ($why). You can still attach a photo with the 📎 button.");
     return null;
   } finally {
     await scanner.close();

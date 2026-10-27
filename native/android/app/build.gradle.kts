@@ -44,7 +44,10 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName(if (keystore != null) "release" else "debug")
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // No code shrinking: R8's full mode strips parts that Google's ML Kit (scanner, text reader) and the
+            // notifications plugin look up by name at run time, which crashed the receipt scanner.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
