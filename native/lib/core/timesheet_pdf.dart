@@ -152,12 +152,13 @@ class _Ctx {
     for (var i = 0; i < lines.length; i++) { _str(f, sz, lines[i], X(x1), top - i * lh, color); }
   }
 
-  void image(Uint8List? bytes, double x1, double y1, double x2, double y2) {
+  // Image fitted inside a box: centred, or for a signature from the left and sitting on the bottom (the line).
+  void image(Uint8List? bytes, double x1, double y1, double x2, double y2, {bool signature = false}) {
     if (bytes == null || bytes.isEmpty) return;
     final img = PdfImage.file(doc, bytes: bytes);
     final bw = S(x2 - x1), bh = S(y2 - y1), k = (bw / img.width) < (bh / img.height) ? bw / img.width : bh / img.height;
     final w = img.width * k, hh = img.height * k;
-    g.drawImage(img, X(x1) + (bw - w) / 2, Y(y2) + (bh - hh) / 2, w, hh);
+    g.drawImage(img, X(x1) + (signature ? 0 : (bw - w) / 2), Y(y2) + (signature ? 0 : (bh - hh) / 2), w, hh);
   }
 }
 
@@ -240,7 +241,7 @@ void _page1(PdfDocument doc, _Fonts fonts, P1Data d, Uint8List? logo) {
   c.text(d.totalWeekendDays, 756, by - 2, 12, color: _fill, align: 'center');
   if (d.away24 == 'YES') { c.circle(996, 996 + yesW, by + 2); } else if (d.away24 == 'NO') { c.circle(996 + yw, 996 + yw + noW, by + 2); }
   if (d.declaration == 'YES') { c.circle(1313, 1313 + yesW, 876); } else if (d.declaration == 'NO') { c.circle(1313 + yw, 1313 + yw + noW, 876); }
-  c.image(d.signature, 1175, by - 36, 1385, by + 6);
+  c.image(d.signature, 1175, by - 36, 1385, by + 6, signature: true);
   c.text(d.name, 165, 63, 12, color: _fill, maxPx: 432);
   c.text(d.weekCommencing, 1110, 70, 12, color: _fill, maxPx: 278);
 }
@@ -355,7 +356,7 @@ void _page2(PdfDocument doc, _Fonts fonts, P2Data d) {
   c.text(d.addr2, 488, 271, 11, color: _fill, maxPx: 345);
   c.text(d.ni, 392, 310, 11, color: _fill, maxPx: 182);
   c.text(d.vehicle, 697, 308, 11, color: _fill, maxPx: 145);
-  c.image(d.signature, 186, 593, 470, 638);
+  c.image(d.signature, 186, 593, 470, 638, signature: true);
   c.text(d.signedDate, 530, 625, 11, color: _fill, maxPx: 210);
   c.text(d.weDate, 694, 901, 10, color: _fill, maxPx: 190);
 

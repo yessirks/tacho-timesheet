@@ -90,13 +90,15 @@
       const lh = sz * 1.18, top = Y(y1) - sz * 0.95;
       lines.forEach((l, i) => page.drawText(l, { x: X(x1), y: top - i * lh, size: sz, font, color: o.color || FILL }));
     };
-    c.image = async (doc, dataUrl, x1, y1, x2, y2) => {
+    // Image fitted inside a box: centred, or for a signature from the left and sitting on the bottom (the line).
+    c.image = async (doc, dataUrl, x1, y1, x2, y2, o = {}) => {
       if (!dataUrl) return;
       const bytes = dataUrlBytes(dataUrl);
       const img = dataUrl.startsWith('data:image/png') ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
       const bw = S(x2 - x1), bh = S(y2 - y1), k = Math.min(bw / img.width, bh / img.height);
       const w = img.width * k, h = img.height * k;
-      page.drawImage(img, { x: X(x1) + (bw - w) / 2, y: Y(y2) + (bh - h) / 2, width: w, height: h });
+      const sig = o.anchor === 'bottomLeft';
+      page.drawImage(img, { x: X(x1) + (sig ? 0 : (bw - w) / 2), y: Y(y2) + (sig ? 0 : (bh - h) / 2), width: w, height: h });
     };
     return c;
   }
@@ -188,7 +190,7 @@
     c.text(d.totalWeekendDays, 756, by - 2, 12, { color: FILL, align: 'center' });
     if (d.away24 === 'YES') c.circle(996, 996 + yesW, by + 2); else if (d.away24 === 'NO') c.circle(996 + yw, 996 + yw + noW, by + 2);
     if (d.declaration === 'YES') c.circle(1313, 1313 + yesW, 876); else if (d.declaration === 'NO') c.circle(1313 + yw, 1313 + yw + noW, 876);
-    await c.image(doc, d.signature, 1175, by - 36, 1385, by + 6);
+    await c.image(doc, d.signature, 1175, by - 36, 1385, by + 6, { anchor: 'bottomLeft' });
     c.text(d.name, 165, 63, 12, { color: FILL, maxPx: 432 });
     c.text(d.weekCommencing, 1110, 70, 12, { color: FILL, maxPx: 278 });
   }
@@ -303,7 +305,7 @@
     c.text(d.addr2, 488, 271, 11, { ...F, maxPx: 345 });
     c.text(d.ni, 392, 310, 11, { ...F, maxPx: 182 });
     c.text(d.vehicle, 697, 308, 11, { ...F, maxPx: 145 });
-    await c.image(doc, d.signature, 186, 593, 470, 638);
+    await c.image(doc, d.signature, 186, 593, 470, 638, { anchor: 'bottomLeft' });
     c.text(d.signedDate, 530, 625, 11, { ...F, maxPx: 210 });
     c.text(d.weDate, 694, 901, 10, { ...F, maxPx: 190 });
 

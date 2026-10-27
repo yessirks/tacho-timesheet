@@ -9,6 +9,10 @@ import '../data/store.dart';
 
 AppStore get store => AppStore.I;
 
+const releaseUrl = 'https://github.com/yessirks/tacho-timesheet/releases/download/tuki-native-latest/Tuki-native.apk';
+/// A newer APK on GitHub than the one installed (checked once per start).
+final updateAvailable = ValueNotifier<String?>(null);
+
 // ---- theme --------------------------------------------------------------------------
 const navy = Color(0xFF0A1430), navy2 = Color(0xFF16224D), orange = Color(0xFFFF6B3D), amber = Color(0xFFFFB547);
 

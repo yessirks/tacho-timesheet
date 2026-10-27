@@ -272,3 +272,42 @@ List<PlaceIO> parseImport(String text) {
   }
   return out;
 }
+
+// ---- shared text / short Google Maps links ----------------------------------------------
+final _urlRe = RegExp(r'https?://\S+');
+
+/// A place out of text shared from Google Maps (or anything with coordinates in it). Short links
+/// (maps.app.goo.gl) are followed to the full link, which has the pin's coordinates. Null if none found
+/// (e.g. a link to a search rather than a place).
+Future<Coords?> coordsFromShare(String text) async {
+  final lines = text.split(RegExp(r'\r?\n')).map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+  // Google Maps shares "Place name\nAddress\nhttps://maps.app.goo.gl/…": the first line is the name.
+  final firstLine = lines.isNotEmpty && !_urlRe.hasMatch(lines.first) ? lines.first : '';
+  Coords named(Coords c) => Coords(c.lat, c.lon, c.name.isNotEmpty ? c.name : firstLine);
+  final direct = parseCoords(text);
+  if (direct != null) return named(direct);
+  final url = _urlRe.firstMatch(text)?[0];
+  if (url == null) return null;
+  final client = http.Client();
+  try {
+    var next = Uri.parse(url);
+    for (var hop = 0; hop < 8; hop++) {
+      final req = http.Request('GET', next)..followRedirects = false..headers.addAll(_ua);
+      final res = await client.send(req).timeout(const Duration(seconds: 10));
+      final loc = res.headers['location'];
+      // Only a link that carries the pin counts: the page itself shows the map around *you*, not the place.
+      if (loc == null) { await res.stream.drain<void>(); return null; }
+      await res.stream.drain<void>();
+      next = next.resolve(loc);
+      // The UK consent page carries the real link in "continue".
+      final target = next.queryParameters['continue'] ?? next.toString();
+      final c = parseCoords(Uri.decodeFull(target));
+      if (c != null) return named(c);
+    }
+    return null;
+  } catch (_) {
+    return null;
+  } finally {
+    client.close();
+  }
+}

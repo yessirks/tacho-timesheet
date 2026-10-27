@@ -78,6 +78,17 @@ class _SheetTabState extends State<SheetTab> {
         return Scaffold(
           appBar: AppBar(title: const Text('Timesheet', style: TextStyle(fontWeight: FontWeight.w800)), actions: [
             IconButton(tooltip: 'Load tacho card file (.ddd)', icon: const Icon(Icons.sd_card_outlined), onPressed: loadCard),
+            PopupMenuButton<String>(
+              onSelected: (v) async {
+                if (v == 'reset' && await confirm(context, 'Clear your edits to the days and totals for this week? Expenses, receipts and your diary are kept.', ok: 'Clear')) {
+                  final w = store.weekState(sun);
+                  w['days'] = List.generate(7, (_) => <String, dynamic>{});
+                  w['foot'] = <String, dynamic>{};
+                  store.changed();
+                }
+              },
+              itemBuilder: (_) => const [PopupMenuItem(value: 'reset', child: Text("Put this week's tacho values back"))],
+            ),
           ]),
           body: ListView(padding: const EdgeInsets.only(bottom: 110), children: [
             Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

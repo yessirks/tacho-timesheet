@@ -8,6 +8,7 @@ import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import '../core/receipt.dart';
 import '../data/store.dart';
 import 'common.dart';
@@ -77,6 +78,9 @@ Future<String?> attachInto(BuildContext context, J e, {bool read = true}) async 
   }
 }
 
+/// Reads the total from the receipt already attached to `e`.
+Future<String> autoReadInto(J e) async { final f = store.attFile(e['att']); return f == null ? '' : _autoRead(e, f.path); }
+
 /// "Read total" fills an empty amount / VAT, and the type when it's obvious.
 Future<String> _autoRead(J e, String path) async {
   if (store.profile['autoRead'] == 'no') return '';
@@ -100,20 +104,58 @@ class AttThumb extends StatelessWidget {
     final child = att['kind'] == 'pdf' || f == null || !f.existsSync()
         ? Container(width: 44, height: 44, alignment: Alignment.center, decoration: BoxDecoration(color: Colors.red.withValues(alpha: .12), borderRadius: BorderRadius.circular(8)),
             child: Text(att['kind'] == 'pdf' ? 'PDF' : '?', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)))
-        : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(f, width: 44, height: 44, fit: BoxFit.cover, cacheWidth: 120));
+        : ClipRRect(borderRadius: BorderRadius.circular(8), child: RotatedBox(quarterTurns: _turns(att), child: Image.file(f, width: 44, height: 44, fit: BoxFit.cover, cacheWidth: 120)));
     return InkWell(onTap: () => viewAttachment(context, att), child: child);
   }
 }
 
+int _turns(Map att) => (((att['rot'] as num?) ?? 0).toInt() % 360) ~/ 90;
+
 Future<void> viewAttachment(BuildContext context, Map att) async {
   final f = store.attFile(att);
-  if (f == null || !await f.exists()) return;
-  if (!context.mounted) return;
-  if (att['kind'] == 'pdf') { toast(context, 'PDF receipts are added to the timesheet as pages.'); return; }
-  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(
-        backgroundColor: Colors.black, appBar: AppBar(title: Text(att['name'] ?? 'Receipt')),
-        body: InteractiveViewer(maxScale: 6, child: Center(child: Image.file(f))),
-      )));
+  if (f == null || !await f.exists() || !context.mounted) return;
+  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => _Viewer(att: att, file: f)));
+}
+
+/// Full-screen receipt (photo, or every page of a PDF) with buttons to turn it the right way up.
+class _Viewer extends StatefulWidget {
+  final Map att; final File file;
+  const _Viewer({required this.att, required this.file});
+  @override
+  State<_Viewer> createState() => _ViewerState();
+}
+
+class _ViewerState extends State<_Viewer> {
+  final pages = <Uint8List>[];
+  @override
+  void initState() {
+    super.initState();
+    if (widget.att['kind'] == 'pdf') {
+      widget.file.readAsBytes().then((b) async {
+        await for (final p in Printing.raster(b, dpi: 72)) { final png = await p.toPng(); if (mounted) setState(() => pages.add(png)); }
+      });
+    }
+  }
+  void turn(int deg) { widget.att['rot'] = ((((widget.att['rot'] as num?) ?? 0).toInt() + deg) % 360 + 360) % 360; store.changed(); setState(() {}); }
+  @override
+  Widget build(BuildContext context) {
+    final q = _turns(widget.att);
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(title: Text(widget.att['name'] ?? 'Receipt'), actions: [
+        IconButton(tooltip: 'Turn left', icon: const Icon(Icons.rotate_left), onPressed: () => turn(-90)),
+        IconButton(tooltip: 'Turn right', icon: const Icon(Icons.rotate_right), onPressed: () => turn(90)),
+      ]),
+      body: widget.att['kind'] == 'pdf'
+          ? ListView(padding: const EdgeInsets.all(12), children: [
+              if (pages.isEmpty) const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator())),
+              for (final p in pages) Padding(padding: const EdgeInsets.only(bottom: 12), child: RotatedBox(quarterTurns: q, child: Image.memory(p))),
+            ])
+          : InteractiveViewer(maxScale: 6, child: Center(child: RotatedBox(quarterTurns: q, child: Image.file(widget.file)))),
+      bottomNavigationBar: const SafeArea(child: Padding(padding: EdgeInsets.all(12),
+          child: Text('Turn it so the writing reads the right way. The timesheet uses a portrait or landscape page to match.', style: TextStyle(color: Colors.white70), textAlign: TextAlign.center))),
+    );
+  }
 }
 
 /// Temp file helper for sharing.

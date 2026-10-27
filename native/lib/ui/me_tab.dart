@@ -5,7 +5,9 @@ import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/week.dart' show todayKey;
 import '../data/pdf_service.dart';
 import '../data/store.dart';
@@ -27,6 +29,12 @@ class MeTab extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(title: const Row(children: [TukiMark(size: 30), SizedBox(width: 10), Text('Me', style: TextStyle(fontWeight: FontWeight.w800))])),
           body: ListView(padding: const EdgeInsets.only(bottom: 30), children: [
+            ValueListenableBuilder(valueListenable: updateAvailable, builder: (context, v, _) => v == null ? const SizedBox() : Card(
+              color: orange.withValues(alpha: .12),
+              child: ListTile(leading: const Icon(Icons.system_update, color: orange), title: Text('Tuki $v is ready', style: const TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: const Text('Download it and open it to update. Your data stays.'),
+                  trailing: FilledButton(onPressed: () => launchUrl(Uri.parse(releaseUrl), mode: LaunchMode.externalApplication), child: const Text('Download'))),
+            )),
             Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               const SectionTitle('Your details (on the timesheet)'),
               SyncedField(label: 'Name (page 1)', value: (p['name'] ?? '').toString(), hint: store.card != null ? '${store.card!.identification.surname} ${store.card!.identification.firstNames}' : '', onChanged: (v) => setP('name', v)),
@@ -83,7 +91,10 @@ class MeTab extends StatelessWidget {
               const SizedBox(height: 10),
               choice('dropWord', 'Write "Drop" before drop names', yn, def: 'no'),
               const SizedBox(height: 10),
-              choice('hereAlerts', 'Tell me when I arrive at a starred place', yn),
+              choice('hereAlerts', 'Tell me when I arrive at a starred place', const {'yes': 'While Tuki is open', 'always': 'Also when Tuki is closed', 'no': 'Never'}),
+              if (p['hereAlerts'] == 'always') Padding(padding: const EdgeInsets.only(top: 4), child: Text(
+                  'Android shows a small "Watching for your starred places" notification while this is on. It uses a little more battery.',
+                  style: TextStyle(color: mutedColor(context), fontSize: 12))),
               const SizedBox(height: 10),
               choice('nearTacho', '"Were you here?" also from tacho GPS', yn),
               const SizedBox(height: 10),
@@ -117,17 +128,25 @@ class MeTab extends StatelessWidget {
             ]))),
             Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               const SectionTitle('Backup'),
-              Text('Everything is saved on this phone. Keep a copy now and then (receipt photos are not in the copy).', style: TextStyle(color: mutedColor(context), fontSize: 13)),
+              Text('Everything is saved on this phone. Keep a copy now and then. The full copy has your receipts too, for moving to a new phone.', style: TextStyle(color: mutedColor(context), fontSize: 13)),
               const SizedBox(height: 10),
               Wrap(spacing: 8, runSpacing: 6, children: [
-                FilledButton.tonalIcon(icon: const Icon(Icons.upload_file, size: 18), label: const Text('Save a copy'), onPressed: () async {
+                FilledButton.icon(icon: const Icon(Icons.inventory_2_outlined, size: 18), label: const Text('Full copy (with receipts)'), onPressed: () async {
+                  final f = await tempFile('tuki-full-${todayKey()}.zip', await store.exportFull());
+                  await SharePlus.instance.share(ShareParams(files: [XFile(f.path, mimeType: 'application/zip')], subject: 'Tuki full backup'));
+                }),
+                FilledButton.tonalIcon(icon: const Icon(Icons.upload_file, size: 18), label: const Text('Data only'), onPressed: () async {
                   final f = await tempFile('tuki-data-${todayKey()}.json', Uint8List.fromList(utf8.encode(store.exportAll())));
                   await SharePlus.instance.share(ShareParams(files: [XFile(f.path, mimeType: 'application/json')], subject: 'Tuki backup'));
                 }),
-                OutlinedButton.icon(icon: const Icon(Icons.download, size: 18), label: const Text('Restore / import from web app'), onPressed: () async {
+                OutlinedButton.icon(icon: const Icon(Icons.download, size: 18), label: const Text('Restore (.zip or web-app .json)'), onPressed: () async {
                   final f = await pickOne();
                   if (f == null) return;
-                  try { store.importAll(utf8.decode(f.bytes)); if (context.mounted) toast(context, '✓ Imported'); }
+                  try {
+                    final isZip = f.bytes.length > 3 && f.bytes[0] == 0x50 && f.bytes[1] == 0x4B; // "PK"
+                    if (isZip) { await store.importFull(f.bytes); } else { store.importAll(utf8.decode(f.bytes)); }
+                    if (context.mounted) toast(context, '✓ Imported');
+                  }
                   catch (e) { if (context.mounted) alert(context, 'That file could not be read: $e'); }
                 }),
                 if (((p['hiddenStops'] ?? const []) as List).isNotEmpty)
@@ -138,7 +157,8 @@ class MeTab extends StatelessWidget {
                 }, child: const Text('Blank timesheet PDF')),
               ]),
             ]))),
-            Padding(padding: const EdgeInsets.all(16), child: Text('Tuki · native Android app · made for drivers', textAlign: TextAlign.center, style: TextStyle(color: mutedColor(context), fontSize: 12))),
+            FutureBuilder(future: PackageInfo.fromPlatform(), builder: (context, s) => Padding(padding: const EdgeInsets.all(16),
+                child: Text('Tuki ${s.data?.version ?? ''} · native Android app · made for drivers', textAlign: TextAlign.center, style: TextStyle(color: mutedColor(context), fontSize: 12)))),
           ]),
         );
       });

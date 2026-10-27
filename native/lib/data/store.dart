@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import '../core/geo.dart' as geo;
@@ -156,6 +157,34 @@ class AppStore extends ChangeNotifier {
       };
 
   String exportAll() => const JsonEncoder.withIndent(' ').convert(_toJson(forExport: true));
+
+  /// Everything, receipts included, as one .zip (for moving to a new phone).
+  Future<Uint8List> exportFull() async {
+    final a = Archive();
+    final json = utf8.encode(jsonEncode({..._toJson(), 'profile': {...profile}..remove('_cardName')}));
+    a.addFile(ArchiveFile('tuki.json', json.length, json));
+    await for (final f in attDir.list()) {
+      if (f is File) { final b = await f.readAsBytes(); a.addFile(ArchiveFile('att/${f.uri.pathSegments.last}', b.length, b)); }
+    }
+    if (await _cardFile.exists()) { final b = await _cardFile.readAsBytes(); a.addFile(ArchiveFile('card.ddd', b.length, b)); }
+    return Uint8List.fromList(ZipEncoder().encode(a));
+  }
+
+  /// Restores a full backup .zip: receipts and card file come back, data is merged like a normal import.
+  Future<void> importFull(Uint8List zip) async {
+    final a = ZipDecoder().decodeBytes(zip);
+    String? json; Uint8List? cardBytes;
+    for (final f in a.files) {
+      if (!f.isFile) continue;
+      final b = f.content;
+      if (f.name == 'tuki.json') { json = utf8.decode(b); }
+      else if (f.name == 'card.ddd') { cardBytes = b; }
+      else if (f.name.startsWith('att/') && !f.name.contains('..')) { await File('${attDir.path}/${f.name.substring(4)}').writeAsBytes(b); }
+    }
+    if (json == null) throw const FormatException('No Tuki data in this zip.');
+    importAll(json);
+    if (cardBytes != null && card == null) await loadCard(cardBytes, 'card.ddd');
+  }
 
   /// Merge, so restoring never wipes a signature, places or entries already on this device.
   void importAll(String text) {

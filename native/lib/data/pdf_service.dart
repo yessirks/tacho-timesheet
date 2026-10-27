@@ -1,5 +1,6 @@
 // Gathers a week's values, expenses and receipts and builds the timesheet PDF (buildData in app.js).
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 import 'package:printing/printing.dart';
 import '../core/timesheet_pdf.dart';
 import '../core/week.dart';
@@ -51,12 +52,18 @@ Future<List<Attachment>> _attachments(AppStore s, String sun) async {
   Future<void> add(Map att, String caption) async {
     final f = s.attFile(att);
     if (f == null || !await f.exists()) return;
-    final bytes = await f.readAsBytes();
+    final bytes = await f.readAsBytes(), rot = ((att['rot'] as num?) ?? 0).toInt() % 360;
+    // Turned the way you set it in the receipt viewer; each page then gets a portrait or landscape sheet to match.
+    Uint8List turned(img.Image im) => img.encodeJpg(rot == 0 ? im : img.copyRotate(im, angle: rot), quality: 85);
     if (att['kind'] == 'pdf') {
       var n = 0;
       await for (final page in Printing.raster(bytes, dpi: 130)) {
-        out.add(Attachment(await page.toPng(), n++ == 0 ? caption : ''));
+        final im = img.Image.fromBytes(width: page.width, height: page.height, bytes: page.pixels.buffer, numChannels: 4, order: img.ChannelOrder.rgba);
+        out.add(Attachment(turned(im), n++ == 0 ? caption : ''));
       }
+    } else if (rot != 0) {
+      final im = img.decodeImage(bytes);
+      out.add(Attachment(im == null ? bytes : turned(im), caption));
     } else {
       out.add(Attachment(bytes, caption));
     }
