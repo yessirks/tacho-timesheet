@@ -47,14 +47,15 @@ ThemeData tukiTheme(Brightness b) {
   );
 }
 
-/// The orange T on navy, drawn (matches the launcher icon).
+/// The Tuki logo: a white T whose stem ends in a map-pin point, on blue (matches the launcher icon).
 class TukiMark extends StatelessWidget {
   final double size;
   const TukiMark({super.key, this.size = 30});
   @override
   Widget build(BuildContext context) => Container(
         width: size, height: size,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(size * 0.24), gradient: const LinearGradient(colors: [navy2, navy], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(size * 0.24),
+            gradient: const LinearGradient(colors: [Color(0xFF1E66F5), navy], begin: Alignment.topLeft, end: Alignment.bottomRight)),
         child: CustomPaint(painter: _TPainter()),
       );
 }
@@ -63,15 +64,17 @@ class _TPainter extends CustomPainter {
   @override
   void paint(Canvas c, Size s) {
     final k = s.width / 512;
+    Offset o(double x, double y) => Offset(x * k, y * k);
     final p = Path()
-      ..moveTo(152 * k, 132 * k)..lineTo(360 * k, 132 * k)
-      ..arcToPoint(Offset(360 * k, 200 * k), radius: Radius.circular(34 * k))
-      ..lineTo(292 * k, 200 * k)..lineTo(292 * k, 372 * k)
-      ..arcToPoint(Offset(220 * k, 372 * k), radius: Radius.circular(36 * k))
-      ..lineTo(220 * k, 200 * k)..lineTo(152 * k, 200 * k)
-      ..arcToPoint(Offset(152 * k, 132 * k), radius: Radius.circular(34 * k))..close();
-    c.drawPath(p, Paint()..shader = const LinearGradient(colors: [Color(0xFFFFC75A), Color(0xFFFF5A36)], begin: Alignment.topCenter, end: Alignment.bottomCenter)
-        .createShader(Rect.fromLTWH(0, 132 * k, s.width, 280 * k)));
+      ..moveTo(150 * k, 132 * k)..lineTo(362 * k, 132 * k)
+      ..arcToPoint(o(362, 200), radius: Radius.circular(34 * k))
+      ..lineTo(294 * k, 200 * k)..lineTo(294 * k, 330 * k)
+      ..cubicTo(294 * k, 356 * k, 274 * k, 378 * k, 256 * k, 404 * k)
+      ..cubicTo(238 * k, 378 * k, 218 * k, 356 * k, 218 * k, 330 * k)
+      ..lineTo(218 * k, 200 * k)..lineTo(150 * k, 200 * k)
+      ..arcToPoint(o(150, 132), radius: Radius.circular(34 * k))..close();
+    c.drawPath(p, Paint()..color = Colors.white);
+    c.drawCircle(o(256, 166), 17 * k, Paint()..color = orange);
   }
   @override
   bool shouldRepaint(_) => false;
